@@ -61,7 +61,7 @@ for (const file of files) {
 // Seed admin user
 console.log('\n👤 Creating admin auth user...')
 const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-  email: 'admin@jamia.edu',
+  email: 'nizamiq001@gmail.com',
   password: 'Admin1234!',
   email_confirm: true,
   user_metadata: { role: 'admin', full_name_en: 'System Admin' }
@@ -97,6 +97,6 @@ if (authError) {
 
 console.log('\n✅ Migration runner complete.')
 console.log('\n📋 Credentials:')
-console.log('   Email:    admin@jamia.edu')
+console.log('   Email:    nizamiq001@gmail.com')
 console.log('   Password: Admin1234!')
 console.log('\n🌐 Open http://localhost:3000/en/login to log in.\n')

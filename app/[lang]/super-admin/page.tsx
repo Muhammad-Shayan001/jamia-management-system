@@ -23,53 +23,67 @@ export default async function SuperAdminOverviewPage({
   const isRtl = lang === 'ur'
   const supabase = await createClient()
 
+  const today = new Date().toISOString().split('T')[0]
+  const currentMonthYear = today.slice(0, 7)
+
   // Real DB counts with graceful fallback
-  const [studentsRes, teachersRes, classesRes, approvalsRes] = await Promise.all([
+  const [studentsRes, teachersRes, classesRes, approvalsRes, todayAttendanceRes, monthlyVouchersRes] = await Promise.all([
     supabase.from('students').select('*', { count: 'exact', head: true }),
     supabase.from('teachers').select('*', { count: 'exact', head: true }),
     supabase.from('classes').select('*', { count: 'exact', head: true }),
     supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_active', false),
+    supabase.from('attendance').select('status').eq('date', today),
+    supabase.from('fee_vouchers').select('amount').eq('status', 'paid').like('month_year', `${currentMonthYear}%`),
   ])
+
+  const todayRecords = todayAttendanceRes.data || []
+  const todayTotal = todayRecords.length
+  const todayPresent = todayRecords.filter((r: any) => r.status === 'present' || r.status === 'late').length
+  const todayAttendanceRate = todayTotal > 0 ? `${((todayPresent / todayTotal) * 100).toFixed(1)}%` : 0
+
+  const paidVouchers = monthlyVouchersRes.data || []
+  const monthlyTotal = paidVouchers.reduce((sum: number, v: any) => sum + (Number(v.amount) || 0), 0)
+  const monthlyCollection = monthlyTotal > 0 ? `PKR ${monthlyTotal.toLocaleString()}` : 0
 
   const stats = [
     {
       title: isRtl ? 'کل طلباء' : 'Total Students',
-      value: studentsRes.count || 240,
+      value: studentsRes.count || 0,
       icon: Users,
       color: 'text-blue-500',
       bg: 'bg-blue-50 dark:bg-blue-950/40',
     },
     {
       title: isRtl ? 'اساتذہ کرام' : 'Total Teachers',
-      value: teachersRes.count || 18,
+      value: teachersRes.count || 0,
       icon: GraduationCap,
       color: 'text-green-500',
       bg: 'bg-green-50 dark:bg-green-950/40',
     },
     {
       title: isRtl ? 'فعال کلاسز' : 'Active Classes',
-      value: classesRes.count || 6,
+      value: classesRes.count || 0,
       icon: Shield,
       color: 'text-purple-500',
       bg: 'bg-purple-50 dark:bg-purple-950/40',
     },
     {
       title: isRtl ? 'آج کی حاضری شرح' : 'Today Attendance',
-      value: '94.8%',
+      value: todayAttendanceRate,
       icon: Calendar,
       color: 'text-emerald-500',
       bg: 'bg-emerald-50 dark:bg-emerald-950/40',
     },
     {
       title: isRtl ? 'ماہانہ فیس وصولی' : 'Monthly Collection',
-      value: 'PKR 640k',
+      value: monthlyCollection,
       icon: Wallet,
       color: 'text-accent',
       bg: 'bg-accent/10',
     },
     {
       title: isRtl ? 'زیر التواء منظوریاں' : 'Pending Approvals',
-      value: approvalsRes.count || 4,
+      value: approvalsRes.count || 0,
       icon: UserCheck,
       color: 'text-rose-500',
       bg: 'bg-rose-50 dark:bg-rose-950/40',
@@ -88,7 +102,7 @@ export default async function SuperAdminOverviewPage({
                 {isRtl ? 'سپر ایڈمنسٹریٹر' : 'Single Super Admin'}
               </span>
               <span className="text-xs text-primary-foreground/70">
-                {process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || 'admin@jamia.edu'}
+                {process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || 'nizamiq001@gmail.com'}
               </span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">

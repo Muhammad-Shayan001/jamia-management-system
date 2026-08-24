@@ -6,7 +6,7 @@ const LOCALES = ['en', 'ur'] as const
 type Locale = typeof LOCALES[number]
 
 const DEFAULT_LOCALE: Locale = 'en'
-const SUPER_ADMIN_EMAIL = (process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || 'admin@jamia.edu').toLowerCase()
+const SUPER_ADMIN_EMAIL = (process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || 'nizamiq001@gmail.com').toLowerCase()
 
 function getLocale(request: NextRequest): Locale {
   const cookieLocale = request.cookies.get('NEXT_LOCALE')?.value
@@ -38,7 +38,7 @@ const ROLE_PORTALS: Record<string, string> = {
 }
 
 // Public paths that don't require auth (after locale prefix)
-const PUBLIC_PATHS = ['/login', '/reset-password', '/update-password']
+const PUBLIC_PATHS = ['/login', '/signup', '/reset-password', '/update-password', '/forgot-password']
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl

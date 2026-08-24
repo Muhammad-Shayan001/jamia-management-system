@@ -32,6 +32,7 @@ import { useState, useEffect } from 'react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import { PageTransition } from '@/components/ui/PageTransition'
+import { logout } from '@/lib/actions/auth'
 
 export type PortalType = 'super_admin' | 'admin' | 'teacher' | 'student'
 
@@ -217,13 +218,15 @@ export function PortalShell({
 
         {/* Logout */}
         <div className="p-3 border-t border-sidebar-border shrink-0 bg-sidebar/30">
-          <Link
-            href={`/${lang}/login`}
-            className="flex items-center w-full px-3 py-2.5 rounded-xl text-sm font-medium text-sidebar-foreground/70 hover:text-white hover:bg-red-500/20 hover:border-red-500/30 transition-all border border-transparent"
-          >
-            <LogOut className={`w-4 h-4 shrink-0 text-red-400 ${isRtl ? 'ml-3 -scale-x-100' : 'mr-3'}`} />
-            <span>{isRtl ? 'لاگ آؤٹ' : 'Log Out'}</span>
-          </Link>
+          <form action={() => logout(lang)}>
+            <button
+              type="submit"
+              className="flex items-center w-full px-3 py-2.5 rounded-xl text-sm font-medium text-sidebar-foreground/70 hover:text-white hover:bg-red-500/20 hover:border-red-500/30 transition-all border border-transparent"
+            >
+              <LogOut className={`w-4 h-4 shrink-0 text-red-400 ${isRtl ? 'ml-3 -scale-x-100' : 'mr-3'}`} />
+              <span>{isRtl ? 'لاگ آؤٹ' : 'Log Out'}</span>
+            </button>
+          </form>
         </div>
       </aside>
 

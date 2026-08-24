@@ -23,7 +23,7 @@ export async function markAttendance(params: MarkAttendanceParams) {
   }
 
   // Check if caller is super admin by email
-  const superAdminEmail = (process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || 'admin@jamia.edu').toLowerCase()
+  const superAdminEmail = (process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || 'nizamiq001@gmail.com').toLowerCase()
   const isSuperAdminEmail = caller.email?.toLowerCase() === superAdminEmail
 
   // Fetch caller profile
@@ -45,16 +45,25 @@ export async function markAttendance(params: MarkAttendanceParams) {
 
   // RULE 1: Teacher marking a STUDENT via QR scan
   if (callerRole === 'teacher' && params.role === 'student') {
+    // Look up the actual student row ID using the profile_id (params.userId)
+    const { data: studentRecord } = await (supabase
+      .from('students')
+      .select('id, class_id')
+      .eq('profile_id', params.userId)
+      .single()) as any
+      
+    if (!studentRecord) return { error: 'Student record not found for this QR code.' }
+
     const { error } = await (supabase.from('attendance') as any).upsert({
       user_id: params.userId,
-      student_id: params.userId,
+      student_id: studentRecord.id,
       role: 'student',
       date: today,
       status: status,
       marked_by: caller.id,
       scan_method: 'qr_scanned_by_teacher',
       gate: params.gate || 'Classroom Door',
-      class_id: params.classId,
+      class_id: params.classId || studentRecord.class_id,
       check_in_time: new Date().toISOString(),
     })
 
@@ -98,16 +107,24 @@ export async function markAttendance(params: MarkAttendanceParams) {
 
   // Rule 5: Nazim / Super Admin marking a student manually
   if (['nazim', 'admin', 'super_admin'].includes(callerRole) && params.role === 'student') {
+    const { data: studentRecord } = await (supabase
+      .from('students')
+      .select('id, class_id')
+      .eq('profile_id', params.userId)
+      .single()) as any
+      
+    if (!studentRecord) return { error: 'Student record not found.' }
+
     const { error } = await (supabase.from('attendance') as any).upsert({
       user_id: params.userId,
-      student_id: params.userId,
+      student_id: studentRecord.id,
       role: 'student',
       date: today,
       status: status,
       marked_by: caller.id,
       scan_method: 'manual',
       gate: params.gate || 'Admin Office',
-      class_id: params.classId,
+      class_id: params.classId || studentRecord.class_id,
       check_in_time: new Date().toISOString(),
     })
 

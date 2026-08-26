@@ -1,0 +1,29 @@
+{
+  "auth": {
+    "login": "Sign In",
+    "email": "Email Address",
+    "password": "Password",
+    "submit": "Log In",
+    "invalid": "Invalid email or password",
+    "forgot": "Forgot Password?"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "students": "Students",
+    "teachers": "Teachers",
+    "classes": "Classes",
+    "attendance": "Attendance",
+    "results": "Results",
+    "fees": "Fees",
+    "logout": "Log Out",
+    "profile": "Profile"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add_new": "Add New",
+    "search": "Search..."
+  }
+}

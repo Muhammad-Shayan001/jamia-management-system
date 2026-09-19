@@ -1,4 +1,4 @@
-﻿import { createClient } from '../supabase/server'
+import { createClient } from '../supabase/server'
 import { redirect } from 'next/navigation'
 
 export type UserRole = 'super_admin' | 'admin' | 'nazim' | 'teacher' | 'student' | 'parent'
@@ -19,7 +19,10 @@ export async function requireAuth() {
     .eq('id', user!.id)
     .single() as { data: Profile | null; error: any }
 
-  const SUPER_ADMIN_EMAIL = (process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || 'nizamiq001@gmail.com').toLowerCase()
+  if (!process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL) {
+    throw new Error("CRITICAL STARTUP ERROR: NEXT_PUBLIC_SUPER_ADMIN_EMAIL is not set.")
+  }
+  const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL.toLowerCase()
   const isSuperAdmin = user!.email?.toLowerCase() === SUPER_ADMIN_EMAIL
 
   if (profile && !profile.is_active && !isSuperAdmin) {

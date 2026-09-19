@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const CRON_SECRET = process.env.CRON_SECRET
 
 // Function to check if today is a seminary holiday or Friday
 async function checkOffDay(supabase: any, dateStr: string): Promise<{ isOff: boolean; reason?: string }> {
@@ -11,7 +12,7 @@ async function checkOffDay(supabase: any, dateStr: string): Promise<{ isOff: boo
 
   // Traditional Islamic Seminary: Friday (Jumu'ah) is off
   if (dayOfWeek === 5) {
-    return { isOff: true, reason: 'Friday (Jumu\'ah Off)' }
+    return { isOff: true, reason: "Friday (Jumu'ah Off)" }
   }
 
   // Check institution_holidays table
@@ -28,7 +29,28 @@ async function checkOffDay(supabase: any, dateStr: string): Promise<{ isOff: boo
   return { isOff: false }
 }
 
-export async function GET(request: Request) {
+export async function POST(request: Request) {
+  // ─── AUTH CHECK (must happen BEFORE any DB access) ───────────────────
+  // This endpoint is called by a cron job. It must supply:
+  //   Authorization: Bearer <CRON_SECRET>
+  if (!CRON_SECRET) {
+    return NextResponse.json(
+      { error: 'CRON_SECRET environment variable is not configured on this server.' },
+      { status: 500 }
+    )
+  }
+
+  const authHeader = request.headers.get('authorization')
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
+
+  if (!token || token !== CRON_SECRET) {
+    return NextResponse.json(
+      { error: 'Unauthorized. Valid Authorization: Bearer <CRON_SECRET> header required.' },
+      { status: 401 }
+    )
+  }
+  // ─────────────────────────────────────────────────────────────────────
+
   try {
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
       auth: { autoRefreshToken: false, persistSession: false },

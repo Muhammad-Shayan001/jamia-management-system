@@ -1,15 +1,53 @@
 'use server'
 
+import { headers } from 'next/headers'
 import { createClient } from '../supabase/server'
 import { createAdminClient } from '../supabase/admin'
 import { redirect } from 'next/navigation'
-import { headers } from 'next/headers'
+import { validatePassword } from '../validation/password'
+import { sendEmail } from '../communication'
 
-const SUPER_ADMIN_EMAIL = (process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || 'nizamiq001@gmail.com').toLowerCase()
+if (!process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL) {
+  throw new Error("CRITICAL STARTUP ERROR: NEXT_PUBLIC_SUPER_ADMIN_EMAIL is not set in environment variables.")
+}
+const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL.toLowerCase()
 
 export type UserRole = 'super_admin' | 'admin' | 'nazim' | 'teacher' | 'student' | 'parent'
 
+// In-memory rate limiter + Lockout mechanism
+const rateLimitMap = new Map<string, { count: number, resetTime: number }>()
+const lockoutMap = new Map<string, { failedAttempts: number, lockedUntil: number }>()
+
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000 // 15 minutes
+const LOCKOUT_THRESHOLD = 5
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000 // 15 minutes lockout
+
+async function checkRateLimit(actionName: string, maxRequests: number = 5) {
+  const headersList = await headers()
+  const ip = headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || 'anonymous'
+  const key = `${actionName}:${ip}`
+  const now = Date.now()
+
+  const current = rateLimitMap.get(key)
+  if (!current || now > current.resetTime) {
+    rateLimitMap.set(key, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS })
+    return true
+  }
+
+  if (current.count >= maxRequests) {
+    return false
+  }
+
+  current.count++
+  return true
+}
+
 export async function login(prevState: any, formData: FormData) {
+  // Rate limit: 10 attempts per 15 minutes per IP
+  if (!(await checkRateLimit('login', 10))) {
+    return { error: 'Too many login attempts from this network. Please try again in 15 minutes.' }
+  }
+
   const email = (formData.get('email') as string || '').toLowerCase().trim()
   const password = formData.get('password') as string
   const redirectTo = (formData.get('redirectTo') as string) || ''
@@ -18,13 +56,41 @@ export async function login(prevState: any, formData: FormData) {
     return { error: 'Email and password are required' }
   }
 
-  const supabase = await createClient()
+  // Check account lockout
+  const now = Date.now()
+  const lockoutState = lockoutMap.get(email)
+  if (lockoutState && lockoutState.lockedUntil > now) {
+    const minutesLeft = Math.ceil((lockoutState.lockedUntil - now) / 60000)
+    return { error: `Account is temporarily locked due to repeated failed attempts. Try again in ${minutesLeft} minute(s).` }
+  }
 
+  const supabase = await createClient()
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
   if (error) {
+    const currentFails = (lockoutState?.failedAttempts || 0) + 1
+    if (currentFails >= LOCKOUT_THRESHOLD) {
+      lockoutMap.set(email, { failedAttempts: currentFails, lockedUntil: now + LOCKOUT_DURATION_MS })
+      
+      // Log to audit logs using admin client
+      try {
+        const adminClient = createAdminClient()
+        await (adminClient.from('audit_logs') as any).insert({
+          actor_email: email,
+          action: 'ACCOUNT_LOCKOUT',
+          details: { reason: 'Exceeded maximum failed login attempts', ip: 'hidden' }
+        })
+      } catch (_) {}
+      
+      return { error: 'Account locked due to too many failed attempts. Try again in 15 minutes.' }
+    } else {
+      lockoutMap.set(email, { failedAttempts: currentFails, lockedUntil: 0 })
+    }
     return { error: error.message }
   }
+
+  // Success: clear lockout
+  lockoutMap.delete(email)
 
   const { data: profile } = await (supabase
     .from('profiles')
@@ -61,6 +127,10 @@ export async function login(prevState: any, formData: FormData) {
 }
 
 export async function signup(prevState: any, formData: FormData) {
+  if (!(await checkRateLimit('signup', 5))) {
+    return { error: 'Too many signup attempts. Please try again later.' }
+  }
+
   const email = (formData.get('email') as string || '').toLowerCase().trim()
   const password = formData.get('password') as string
   const role = formData.get('role') as UserRole
@@ -78,18 +148,16 @@ export async function signup(prevState: any, formData: FormData) {
     return { error: 'Email, password, and full name (English) are required.' }
   }
 
-  if (password.length < 6) {
-    return { error: 'Password must be at least 6 characters.' }
+  const passCheck = validatePassword(password, role)
+  if (!passCheck.valid) {
+    return { error: passCheck.error }
   }
 
-  const supabase = await createClient()
-
-  // Create auth user (email confirmation disabled — admin approves instead)
   const adminClient = createAdminClient()
   const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
     email,
     password,
-    email_confirm: true, // skip email click — admin approval is the gate
+    email_confirm: true,
     user_metadata: { role, full_name_en: fullNameEn },
   })
 
@@ -104,7 +172,7 @@ export async function signup(prevState: any, formData: FormData) {
   const userId = authData.user.id
   const timestamp = Date.now()
 
-  // Create the profile row — is_active: false until admin approves
+  // Create profile row — is_active: false until admin approves
   const { error: profileError } = await (adminClient.from('profiles') as any).insert({
     id: userId,
     role,
@@ -116,12 +184,10 @@ export async function signup(prevState: any, formData: FormData) {
   })
 
   if (profileError) {
-    // Rollback auth user
     await adminClient.auth.admin.deleteUser(userId)
     return { error: profileError.message }
   }
 
-  // Create role-specific extension row
   if (role === 'student') {
     const admissionNumber = `PEND-${timestamp}`
     const { error: studentError } = await (adminClient.from('students') as any).insert({
@@ -135,7 +201,6 @@ export async function signup(prevState: any, formData: FormData) {
       is_active: false,
     })
     if (studentError) {
-      // Rollback
       await adminClient.auth.admin.deleteUser(userId)
       return { error: studentError.message }
     }
@@ -151,22 +216,77 @@ export async function signup(prevState: any, formData: FormData) {
       is_active: false,
     })
     if (teacherError) {
-      // Rollback
       await adminClient.auth.admin.deleteUser(userId)
       return { error: teacherError.message }
     }
   }
 
-  // Log the pending signup for admin visibility
-  await (adminClient.from('audit_logs') as any).insert({
-    actor_id: userId,
-    actor_email: email,
-    actor_role: role,
-    action: 'SIGNUP_PENDING',
-    entity_type: 'profile',
-    entity_id: userId,
-    details: { full_name_en: fullNameEn, role },
-  }).catch(() => {}) // non-critical
+  try {
+    await (adminClient.from('audit_logs') as any).insert({
+      actor_id: userId,
+      actor_email: email,
+      actor_role: role,
+      action: 'SIGNUP_PENDING',
+      entity_type: 'profile',
+      entity_id: userId,
+      details: { full_name_en: fullNameEn, role },
+    })
+  } catch (_) {}
+
+  // Send acknowledgement email to applicant via Google App Password / Nodemailer
+  try {
+    await sendEmail({
+      to: email,
+      subject: 'Registration Received — Jamia LMS',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
+          <h2 style="color: #0f172a; margin-top: 0;">Registration Received</h2>
+          <p style="color: #334155; font-size: 15px; line-height: 1.6;">
+            As-salamu alaykum <strong>${fullNameEn}</strong>,
+          </p>
+          <p style="color: #334155; font-size: 15px; line-height: 1.6;">
+            Your registration request for <strong>Jamia LMS</strong> as a <strong>${role}</strong> has been received successfully.
+          </p>
+          <p style="color: #334155; font-size: 15px; line-height: 1.6;">
+            Your account is currently pending verification and approval by the administration. You will receive an email confirmation as soon as your account is activated.
+          </p>
+          <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+          <p style="color: #94a3b8; font-size: 12px; margin-bottom: 0;">
+            Jamia Management System — Learning Management Portal
+          </p>
+        </div>
+      `
+    })
+  } catch (e) {
+    console.error('Failed to send signup acknowledgement email:', e)
+  }
+
+  // Notify Super Admin of pending registration
+  try {
+    const origin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    await sendEmail({
+      to: SUPER_ADMIN_EMAIL,
+      subject: `New ${role.toUpperCase()} Registration Pending Approval — ${fullNameEn}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
+          <h2 style="color: #0f172a; margin-top: 0;">New Account Awaiting Approval</h2>
+          <p style="color: #334155; font-size: 15px; line-height: 1.6;">
+            A new user has registered on Jamia LMS and requires your review:
+          </p>
+          <ul style="color: #334155; font-size: 15px; line-height: 1.8;">
+            <li><strong>Full Name:</strong> ${fullNameEn}</li>
+            <li><strong>Email:</strong> ${email}</li>
+            <li><strong>Role:</strong> ${role}</li>
+          </ul>
+          <div style="margin: 24px 0;">
+            <a href="${origin}/en/super-admin/approvals" style="background-color: #1e3a8a; color: #ffffff; padding: 10px 22px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Open Approvals Portal</a>
+          </div>
+        </div>
+      `
+    })
+  } catch (e) {
+    console.error('Failed to notify admin of new signup:', e)
+  }
 
   return {
     success: true,
@@ -181,17 +301,20 @@ export async function createAdminBySuperAdmin(formData: FormData) {
   const fullNameUr = formData.get('fullNameUr') as string
   const role = (formData.get('role') as string) || 'nazim'
 
+  const passCheck = validatePassword(password, role)
+  if (!passCheck.valid) {
+    return { error: passCheck.error }
+  }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
-  const callerEmail = user.email?.toLowerCase() ?? ''
-  if (callerEmail !== SUPER_ADMIN_EMAIL) {
-    return { error: 'Only the Super Admin can create administrator / Nazim accounts.' }
+  if (user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
+    return { error: 'Unauthorized: Only the Super Admin can create admin/nazim accounts' }
   }
 
   const adminClient = createAdminClient()
-
   const { data: newAuth, error: createError } = await adminClient.auth.admin.createUser({
     email,
     password,
@@ -215,15 +338,46 @@ export async function createAdminBySuperAdmin(formData: FormData) {
       totp_enabled: false,
     })
 
-    await (adminClient.from('audit_logs') as any).insert({
-      actor_id: user.id,
-      actor_email: user.email,
-      actor_role: 'super_admin',
-      action: 'CREATE_ADMIN',
-      entity_type: 'profile',
-      entity_id: newAuth.user.id,
-      details: { created_email: email, role },
-    })
+    try {
+      await (adminClient.from('audit_logs') as any).insert({
+        actor_id: user.id,
+        actor_email: user.email,
+        actor_role: 'super_admin',
+        action: 'CREATE_ADMIN',
+        entity_type: 'profile',
+        entity_id: newAuth.user.id,
+        details: { created_email: email, role },
+      })
+    } catch (_) {}
+
+    // Send welcome email with login details
+    try {
+      const origin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      await sendEmail({
+        to: email,
+        subject: `Your Jamia LMS Administrative Account (${role.toUpperCase()})`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
+            <h2 style="color: #0f172a; margin-top: 0;">Welcome to Jamia LMS Administration</h2>
+            <p style="color: #334155; font-size: 15px; line-height: 1.6;">
+              As-salamu alaykum <strong>${fullNameEn}</strong>,
+            </p>
+            <p style="color: #334155; font-size: 15px; line-height: 1.6;">
+              An administrative account with role <strong>${role}</strong> has been created for you by the Super Admin.
+            </p>
+            <div style="background: #f8fafc; padding: 16px; border-radius: 6px; border: 1px solid #e2e8f0; margin: 20px 0;">
+              <p style="margin: 4px 0;"><strong>Login Email:</strong> ${email}</p>
+              <p style="margin: 4px 0;"><strong>Password:</strong> (the password assigned to you)</p>
+            </div>
+            <div style="margin: 24px 0;">
+              <a href="${origin}/en/login" style="background-color: #1e3a8a; color: #ffffff; padding: 10px 22px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Log in to Portal</a>
+            </div>
+          </div>
+        `
+      })
+    } catch (e) {
+      console.error('Failed to send welcome email to new admin:', e)
+    }
   }
 
   return { success: true }
@@ -236,40 +390,107 @@ export async function logout(locale: string) {
 }
 
 export async function resetPassword(prevState: any, formData: FormData) {
+  // Stricter limit on password resets (e.g. 3 per 15 min)
+  if (!(await checkRateLimit('resetPassword', 3))) {
+    return { error: 'Too many reset attempts. Please try again later.' }
+  }
+
   const email = (formData.get('email') as string || '').toLowerCase().trim()
   
   if (!email) {
     return { error: 'Email is required' }
   }
 
-  const supabase = await createClient()
-
   const origin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  const adminClient = createAdminClient()
 
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${origin}/en/update-password`,
+  // Generate recovery link via Supabase Admin API (bypasses Supabase default email limits)
+  const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
+    type: 'recovery',
+    email,
+    options: {
+      redirectTo: `${origin}/en/update-password`,
+    },
   })
 
-  if (error) {
-    return { error: error.message }
+  if (linkError) {
+    return { error: linkError.message }
   }
 
-  return { success: true, message: 'Password reset email sent! Check your inbox.' }
+  const actionLink = linkData?.properties?.action_link
+  if (!actionLink) {
+    return { error: 'Unable to generate password reset link for this email.' }
+  }
+
+  // Send password reset email directly via Google App Password / Nodemailer
+  const emailRes = await sendEmail({
+    to: email,
+    subject: 'Password Reset Request — Jamia LMS',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
+        <h2 style="color: #0f172a; margin-top: 0;">Password Reset Request</h2>
+        <p style="color: #334155; font-size: 15px; line-height: 1.6;">
+          You requested to reset your password for your <strong>Jamia LMS</strong> account.
+        </p>
+        <p style="color: #334155; font-size: 15px; line-height: 1.6;">
+          Click the button below to choose a new password:
+        </p>
+        <div style="margin: 28px 0; text-align: center;">
+          <a href="${actionLink}" style="background-color: #1e3a8a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 15px;">Reset Password</a>
+        </div>
+        <p style="color: #64748b; font-size: 13px; line-height: 1.5;">
+          If the button doesn't work, copy and paste this link into your browser:
+        </p>
+        <p style="color: #64748b; font-size: 12px; word-break: break-all; background: #f8fafc; padding: 10px; border-radius: 4px; border: 1px solid #e2e8f0;">
+          ${actionLink}
+        </p>
+        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+        <p style="color: #94a3b8; font-size: 12px; margin-bottom: 0;">
+          If you did not request this password reset, you can safely ignore this email.
+        </p>
+      </div>
+    `
+  })
+
+  if (!emailRes.success) {
+    console.error('Password reset email error:', emailRes.error)
+    return { error: 'Failed to send password reset email via SMTP. Please try again.' }
+  }
+
+  return { success: true, message: 'Password reset link has been sent to your email!' }
 }
 
 export async function updatePassword(prevState: any, formData: FormData) {
+  if (!(await checkRateLimit('updatePassword', 5))) {
+    return { error: 'Too many attempts. Please try again later.' }
+  }
+
   const password = formData.get('password') as string
   const confirmPassword = formData.get('confirmPassword') as string
-
-  if (!password || password.length < 6) {
-    return { error: 'Password must be at least 6 characters' }
-  }
 
   if (password !== confirmPassword) {
     return { error: 'Passwords do not match' }
   }
 
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  if (!user) {
+    return { error: 'Authentication session not found. Please click the reset link in your email again.' }
+  }
+
+  let role = 'student'
+  if (user.email?.toLowerCase() === SUPER_ADMIN_EMAIL) {
+    role = 'super_admin'
+  } else {
+    const { data: profile } = await (supabase.from('profiles').select('role').eq('id', user.id).single() as any)
+    if (profile) role = profile.role
+  }
+
+  const passCheck = validatePassword(password, role)
+  if (!passCheck.valid) {
+    return { error: passCheck.error }
+  }
 
   const { error } = await supabase.auth.updateUser({
     password: password

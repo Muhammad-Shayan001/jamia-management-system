@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label'
 import { Bell, Send, CheckCircle2, MessageSquare, Mail } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { postAnnouncement } from '@/lib/actions/announcements'
+
 export default function SuperAdminNotificationsPage() {
   const [titleEn, setTitleEn] = useState('')
   const [titleUr, setTitleUr] = useState('')
@@ -18,7 +20,7 @@ export default function SuperAdminNotificationsPage() {
   const [sendEmail, setSendEmail] = useState(true)
   const [isPending, setIsPending] = useState(false)
 
-  const handleBroadcast = (e: React.FormEvent) => {
+  const handleBroadcast = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!titleEn || !bodyEn) {
       toast.error('Please enter announcement title and body')
@@ -26,14 +28,27 @@ export default function SuperAdminNotificationsPage() {
     }
 
     setIsPending(true)
-    setTimeout(() => {
-      setIsPending(false)
-      toast.success('Broadcast notification dispatched to all portals & mobile channels!', { icon: '📢' })
+    const formData = new FormData()
+    formData.set('title_en', titleEn)
+    formData.set('title_ur', titleUr)
+    formData.set('body_en', bodyEn)
+    formData.set('body_ur', bodyUr)
+    formData.set('target_role', targetRole)
+    if (sendEmail) formData.set('send_email', 'true')
+    if (sendWhatsApp) formData.set('send_whatsapp', 'true')
+
+    const res = await postAnnouncement(formData)
+    setIsPending(false)
+
+    if (res.success) {
+      toast.success('Broadcast notification dispatched to all portals & emails successfully!', { icon: '📢' })
       setTitleEn('')
       setTitleUr('')
       setBodyEn('')
       setBodyUr('')
-    }, 600)
+    } else {
+      toast.error(res.error || 'Failed to dispatch broadcast')
+    }
   }
 
   return (

@@ -6,7 +6,10 @@ const LOCALES = ['en', 'ur'] as const
 type Locale = typeof LOCALES[number]
 
 const DEFAULT_LOCALE: Locale = 'en'
-const SUPER_ADMIN_EMAIL = (process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || 'nizamiq001@gmail.com').toLowerCase()
+if (!process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL) {
+  throw new Error("CRITICAL STARTUP ERROR: NEXT_PUBLIC_SUPER_ADMIN_EMAIL is not set in environment variables.")
+}
+const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL.toLowerCase()
 
 function getLocale(request: NextRequest): Locale {
   const cookieLocale = request.cookies.get('NEXT_LOCALE')?.value
@@ -38,7 +41,7 @@ const ROLE_PORTALS: Record<string, string> = {
 }
 
 // Public paths that don't require auth (after locale prefix)
-const PUBLIC_PATHS = ['/login', '/signup', '/reset-password', '/update-password', '/forgot-password']
+const PUBLIC_PATHS = ['/', '/login', '/signup', '/reset-password', '/update-password', '/forgot-password', '/about', '/admissions', '/contact']
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl

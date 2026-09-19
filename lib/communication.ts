@@ -1,7 +1,13 @@
-import { Resend } from 'resend'
+﻿import nodemailer from 'nodemailer'
 
-// Initialize Resend
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Initialize Nodemailer Transport
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.SMTP_EMAIL || 'nizamiq001@gmail.com',
+    pass: process.env.SMTP_APP_PASSWORD || 'fomz mqcy ktqb kvcd'
+  }
+})
 
 export async function sendEmail({
   to,
@@ -12,19 +18,14 @@ export async function sendEmail({
   subject: string
   html: string
 }) {
-  if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY.includes('your_')) {
-    console.log('✉️ [Mock Email] Would send to:', to, 'Subject:', subject)
-    return { success: true, mock: true }
-  }
-
   try {
-    const data = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'Jamia LMS <noreply@jamialms.edu.pk>',
+    const info = await transporter.sendMail({
+      from: `"Jamia LMS" <${process.env.SMTP_EMAIL || 'nizamiq001@gmail.com'}>`,
       to,
       subject,
       html
     })
-    return { success: true, data }
+    return { success: true, data: info }
   } catch (error) {
     console.error('Email send failed:', error)
     return { success: false, error }

@@ -5,6 +5,9 @@ import { Plus, Upload, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { getDictionary } from '@/lib/dictionaries'
+import { BulkImportButton } from '@/components/bulk-import/BulkImportButton'
+import { ExportButton } from '@/components/bulk-import/ExportButton'
+import { getTeachersForExport } from '@/lib/actions/export'
 
 export default async function TeachersPage({ params }: { params: Promise<{ lang: string }> }) {
   const supabase = await createClient()
@@ -22,10 +25,8 @@ export default async function TeachersPage({ params }: { params: Promise<{ lang:
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold tracking-tight">{dict.nav.teachers}</h2>
         <div className="flex space-x-2 rtl:space-x-reverse">
-          <Button variant="outline" className="text-primary border-primary/20">
-            <Upload className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
-            Import CSV
-          </Button>
+          <ExportButton filename="Teachers_Export" fetchData={getTeachersForExport} />
+          <BulkImportButton type="teachers" />
           <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
             <Plus className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
             {dict.common.add_new}

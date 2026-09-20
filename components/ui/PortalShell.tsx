@@ -27,6 +27,11 @@ import {
   UserCheck,
   CreditCard,
   Clock,
+  AlertTriangle,
+  Heart,
+  PieChart,
+  ClipboardList,
+  Search,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useTheme } from 'next-themes'
@@ -34,7 +39,7 @@ import { Button } from '@/components/ui/button'
 import { PageTransition } from '@/components/ui/PageTransition'
 import { logout } from '@/lib/actions/auth'
 
-export type PortalType = 'super_admin' | 'admin' | 'teacher' | 'student'
+export type PortalType = 'super_admin' | 'admin' | 'teacher' | 'student' | 'accountant' | 'receptionist'
 
 // Bilingual Navigation Configs
 const NAV_CONFIGS: Record<
@@ -102,6 +107,29 @@ const NAV_CONFIGS: Record<
       { name: isUr ? 'گفتگو' : 'Chat', href: `/${lang}/student/chat`, icon: MessageSquare },
     ]
   },
+  accountant: (lang) => {
+    const isUr = lang === 'ur'
+    return [
+      { name: isUr ? 'ڈیش بورڈ' : 'Dashboard', href: `/${lang}/accountant/dashboard`, icon: LayoutDashboard },
+      { name: isUr ? 'فیس اسٹرکچر' : 'Fee Structures', href: `/${lang}/accountant/fee-structures`, icon: Settings },
+      { name: isUr ? 'واؤچرز' : 'Fee Vouchers', href: `/${lang}/accountant/vouchers`, icon: FileText },
+      { name: isUr ? 'ڈیفالٹرز' : 'Defaulters', href: `/${lang}/accountant/defaulters`, icon: AlertTriangle },
+      { name: isUr ? 'عطیات (زکوٰۃ و صدقات)' : 'Donations', href: `/${lang}/accountant/donations`, icon: Heart },
+      { name: isUr ? 'اخراجات' : 'Expenses', href: `/${lang}/accountant/expenses`, icon: CreditCard },
+      { name: isUr ? 'مالیاتی رپورٹس' : 'Financial Reports', href: `/${lang}/accountant/reports`, icon: PieChart },
+    ]
+  },
+  receptionist: (lang) => {
+    const isUr = lang === 'ur'
+    return [
+      { name: isUr ? 'ڈیش بورڈ' : 'Dashboard', href: `/${lang}/receptionist/dashboard`, icon: LayoutDashboard },
+      { name: isUr ? 'مہمان' : 'Visitors Log', href: `/${lang}/receptionist/visitors`, icon: Users },
+      { name: isUr ? 'داخلہ انکوائری' : 'Admission Inquiries', href: `/${lang}/receptionist/inquiries`, icon: ClipboardList },
+      { name: isUr ? 'ملاقاتیں' : 'Appointments', href: `/${lang}/receptionist/appointments`, icon: Calendar },
+      { name: isUr ? 'دستاویزات' : 'Document Handoff', href: `/${lang}/receptionist/documents`, icon: FileText },
+      { name: isUr ? 'طلباء تلاش' : 'Student Lookup', href: `/${lang}/receptionist/lookup`, icon: Search },
+    ]
+  },
 }
 
 const PORTAL_TITLES: Record<PortalType, { en: string; ur: string }> = {
@@ -109,6 +137,8 @@ const PORTAL_TITLES: Record<PortalType, { en: string; ur: string }> = {
   admin: { en: 'Nazim / Admin Portal', ur: 'ناظم اعلیٰ / ایڈمن پورٹل' },
   teacher: { en: 'Teacher Portal', ur: 'استاد پورٹل' },
   student: { en: 'Student Portal', ur: 'طالب علم پورٹل' },
+  accountant: { en: 'Accountant Portal', ur: 'محاسب / فیس پورٹل' },
+  receptionist: { en: 'Receptionist Portal', ur: 'ریسپشنسٹ پورٹل' },
 }
 
 export function PortalShell({

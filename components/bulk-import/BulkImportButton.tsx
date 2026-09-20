@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -18,7 +18,7 @@ export function BulkImportButton({ type }: BulkImportButtonProps) {
     <>
       <Button variant="outline" className="text-primary border-primary/20" onClick={() => setIsOpen(true)}>
         <Upload className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
-        Import CSV
+        Bulk Import
       </Button>
 
       {isOpen && (

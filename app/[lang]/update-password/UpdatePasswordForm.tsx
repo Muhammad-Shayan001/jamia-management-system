@@ -1,16 +1,90 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AlertCircle, CheckCircle2, Lock, ArrowRight, ShieldCheck } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 import { updatePassword } from '@/lib/actions/auth'
 import Link from 'next/link'
 
 export default function UpdatePasswordForm({ lang }: { lang: string }) {
   const isUrdu = lang === 'ur'
-  const [state, formAction, isPending] = useActionState(updatePassword, null)
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [isPending, setIsPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    // Process any URL hash tokens or session from Supabase recovery redirect
+    const supabase = createClient()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' || session) {
+        setError(null)
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+
+    if (!password || password.length < 8) {
+      setError(isUrdu ? 'پاس ورڈ کم از کم 8 حروف پر مشتمل ہونا چاہیے۔' : 'Password must be at least 8 characters.')
+      return
+    }
+
+    if (password !== confirmPassword) {
+      setError(isUrdu ? 'پاس ورڈ مماثل نہیں ہیں۔' : 'Passwords do not match.')
+      return
+    }
+
+    setIsPending(true)
+
+    // Method 1: Client-side update (handles hash fragment access tokens and active browser sessions)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+
+      if (user) {
+        const { error: updateError } = await supabase.auth.updateUser({ password })
+        if (!updateError) {
+          setIsPending(false)
+          setSuccess(true)
+          setMessage(isUrdu ? 'پاس ورڈ کامیابی کے ساتھ تبدیل ہو گیا۔ اب آپ لاگ ان کر سکتے ہیں۔' : 'Password updated successfully! You can now log in.')
+          return
+        }
+      }
+    } catch (clientErr) {
+      console.warn('Client update fallback:', clientErr)
+    }
+
+    // Method 2: Server action update (handles server session cookies from /api/auth/callback)
+    try {
+      const formData = new FormData()
+      formData.set('password', password)
+      formData.set('confirmPassword', confirmPassword)
+      const res = await updatePassword(null, formData)
+      setIsPending(false)
+
+      if (res?.error) {
+        setError(res.error)
+      } else {
+        setSuccess(true)
+        setMessage(res?.message || (isUrdu ? 'پاس ورڈ کامیابی کے ساتھ تبدیل ہو گیا۔' : 'Password updated successfully! You can now log in.'))
+      }
+    } catch (serverErr: any) {
+      setIsPending(false)
+      setError(serverErr?.message || (isUrdu ? 'پاس ورڈ اپ ڈیٹ کرنے میں ناکامی۔' : 'Failed to update password. Please try again.'))
+    }
+  }
 
   return (
     <div className="w-full">
@@ -28,19 +102,19 @@ export default function UpdatePasswordForm({ lang }: { lang: string }) {
         </p>
       </div>
 
-      <form action={formAction} className="space-y-5">
-        {state?.error && (
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {error && (
           <div className="p-4 bg-red-50/80 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-xl flex items-start gap-3 animate-in fade-in zoom-in-95 duration-300">
             <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
-            <p className="text-sm font-semibold text-red-800 dark:text-red-300">{state.error}</p>
+            <p className="text-sm font-semibold text-red-800 dark:text-red-300">{error}</p>
           </div>
         )}
 
-        {state?.success ? (
+        {success ? (
           <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
-             <div className="p-4 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 rounded-xl flex items-start gap-3">
+            <div className="p-4 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 rounded-xl flex items-start gap-3">
               <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-              <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">{state.message}</p>
+              <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">{message}</p>
             </div>
             <Link
               href={`/${lang}/login`}
@@ -66,6 +140,8 @@ export default function UpdatePasswordForm({ lang }: { lang: string }) {
                   placeholder="••••••••"
                   required
                   disabled={isPending}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="pl-10 h-12 rounded-xl border-border/50 bg-background/50 focus:bg-background transition-colors text-sm"
                   dir="ltr"
                 />
@@ -87,6 +163,8 @@ export default function UpdatePasswordForm({ lang }: { lang: string }) {
                   placeholder="••••••••"
                   required
                   disabled={isPending}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                   className="pl-10 h-12 rounded-xl border-border/50 bg-background/50 focus:bg-background transition-colors text-sm"
                   dir="ltr"
                 />

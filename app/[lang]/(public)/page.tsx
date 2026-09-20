@@ -1,17 +1,33 @@
 import { getDictionary } from '@/lib/dictionaries'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { ArrowRight, BookOpen, Users, Award } from 'lucide-react'
+import { ArrowRight, BookOpen, Users, Award, Bell, Calendar } from 'lucide-react'
+import { createClient } from '@/lib/supabase/server'
 
 export const metadata = {
   title: 'Jamia LMS — جامعہ لرننگ مینجمنٹ سسٹم',
-  description: 'A perfect blend of traditional Darse Nizami and modern education.',
+  description: 'A perfect blend of traditional Darse Nizami and modern education. Learning Management System for Islamic Seminaries.',
 }
 
 export default async function HomePage({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = await params
   const dict = await getDictionary(lang)
   const isUrdu = lang === 'ur'
+
+  const supabase = await createClient()
+  let announcements: any[] = []
+  try {
+    const { data } = await supabase
+      .from('announcements')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(6)
+    
+    announcements = (data || []).filter((a: any) => {
+      if (!a.target_roles || a.target_roles.length === 0) return true
+      return a.target_roles.includes('public') || a.target_roles.includes('all') || a.target_roles.includes('student')
+    }).slice(0, 3)
+  } catch (_) {}
 
   return (
     <div className="w-full">
@@ -73,6 +89,44 @@ export default async function HomePage({ params }: { params: Promise<{ lang: str
           </div>
         </div>
       </section>
+
+      {/* Public Announcements Feed */}
+      {announcements.length > 0 && (
+        <section className="py-20 border-t border-b border-primary/10">
+          <div className="container mx-auto px-4 max-w-5xl">
+            <div className="flex items-center justify-between mb-10">
+              <div>
+                <h2 className="text-3xl font-bold text-foreground flex items-center gap-2">
+                  <Bell className="w-6 h-6 text-primary" />
+                  {isUrdu ? 'تازہ ترین اعلانات و خبریں' : 'Latest Announcements & News'}
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {isUrdu ? 'جامعہ کی اہم سرگرمیاں اور نوٹس بورڈ' : 'Stay updated with institutional notices and news'}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-3">
+              {announcements.map((item) => (
+                <div key={item.id} className="p-6 rounded-xl border border-border bg-card shadow-sm flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>{new Date(item.created_at).toLocaleDateString(lang === 'ur' ? 'ur-PK' : 'en-US')}</span>
+                    </div>
+                    <h3 className="font-bold text-lg text-card-foreground">
+                      {isUrdu && item.title_ur ? item.title_ur : item.title_en}
+                    </h3>
+                    <p className="text-sm text-muted-foreground line-clamp-3">
+                      {isUrdu && item.body_ur ? item.body_ur : item.body_en}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* CTA */}
       <section className="py-24">

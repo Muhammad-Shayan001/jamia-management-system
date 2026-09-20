@@ -58,6 +58,8 @@ const NAV_CONFIGS: Record<
       { name: isUr ? 'ڈیش بورڈ' : 'Dashboard', href: `/${lang}/admin/dashboard`, icon: LayoutDashboard },
       { name: isUr ? 'طلباء' : 'Students', href: `/${lang}/admin/students`, icon: Users },
       { name: isUr ? 'اساتذہ' : 'Teachers', href: `/${lang}/admin/teachers`, icon: UserCog },
+      { name: isUr ? 'کتب خانہ' : 'Digital Library', href: `/${lang}/admin/library`, icon: BookOpen },
+      { name: isUr ? 'حفظ / تجوید' : 'Hifz Tracker', href: `/${lang}/admin/hifz`, icon: Sparkles },
       { name: isUr ? 'شناختی کارڈز' : 'ID Cards & Print', href: `/${lang}/admin/id-cards`, icon: CreditCard },
       { name: isUr ? 'کلاسز' : 'Classes', href: `/${lang}/admin/classes`, icon: GraduationCap },
       { name: isUr ? 'حاضری' : 'Attendance', href: `/${lang}/admin/attendance`, icon: Calendar },
@@ -71,8 +73,11 @@ const NAV_CONFIGS: Record<
     const isUr = lang === 'ur'
     return [
       { name: isUr ? 'ڈیش بورڈ' : 'Dashboard', href: `/${lang}/teacher/dashboard`, icon: LayoutDashboard },
-      { name: isUr ? 'حاضری اسکین (طلباء)' : 'Scan Students', href: `/${lang}/teacher/attendance/scan-students`, icon: CheckSquare },
       { name: isUr ? 'اپنی حاضری (کیوسک)' : 'Self Check-In', href: `/${lang}/teacher/attendance/self-checkin`, icon: Clock },
+      { name: isUr ? 'اسائنمنٹس' : 'Assignments', href: `/${lang}/teacher/assignments`, icon: FileText },
+      { name: isUr ? 'کوئز' : 'Quizzes', href: `/${lang}/teacher/quizzes`, icon: CheckSquare },
+      { name: isUr ? 'حفظ / تجوید' : 'Hifz Tracker', href: `/${lang}/teacher/hifz`, icon: Sparkles },
+      { name: isUr ? 'حاضری اسکین (طلباء)' : 'Scan Students', href: `/${lang}/teacher/attendance/scan-students`, icon: Calendar },
       { name: isUr ? 'نتائج' : 'Results', href: `/${lang}/teacher/results`, icon: FileText },
       { name: isUr ? 'نصاب و کتب' : 'Syllabus', href: `/${lang}/teacher/syllabus`, icon: BookOpen },
       { name: isUr ? 'ٹائم ٹیبل' : 'Timetable', href: `/${lang}/teacher/timetable`, icon: CalendarCheck },
@@ -83,6 +88,10 @@ const NAV_CONFIGS: Record<
     const isUr = lang === 'ur'
     return [
       { name: isUr ? 'ڈیش بورڈ' : 'Dashboard', href: `/${lang}/student/dashboard`, icon: LayoutDashboard },
+      { name: isUr ? 'اسائنمنٹس' : 'Assignments', href: `/${lang}/student/assignments`, icon: FileText },
+      { name: isUr ? 'کوئز' : 'Quizzes', href: `/${lang}/student/quizzes`, icon: CheckSquare },
+      { name: isUr ? 'حفظ / تجوید' : 'My Hifz', href: `/${lang}/student/hifz`, icon: Sparkles },
+      { name: isUr ? 'کتب خانہ' : 'Library', href: `/${lang}/student/library`, icon: BookOpen },
       { name: isUr ? 'میرا شناختی کارڈ' : 'My ID Card', href: `/${lang}/student/id-card`, icon: CreditCard },
       { name: isUr ? 'میری حاضری' : 'Attendance', href: `/${lang}/student/attendance`, icon: Calendar },
       { name: isUr ? 'امتحانی کارکردگی' : 'Results', href: `/${lang}/student/results`, icon: FileText },

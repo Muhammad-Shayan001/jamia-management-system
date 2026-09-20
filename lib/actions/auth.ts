@@ -6,6 +6,8 @@ import { createAdminClient } from '../supabase/admin'
 import { redirect } from 'next/navigation'
 import { validatePassword } from '../validation/password'
 import { sendEmail } from '../communication'
+import { Ratelimit } from '@upstash/ratelimit'
+import { Redis } from '@upstash/redis'
 
 if (!process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL) {
   throw new Error("CRITICAL STARTUP ERROR: NEXT_PUBLIC_SUPER_ADMIN_EMAIL is not set in environment variables.")
@@ -14,37 +16,57 @@ const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL.toLowerCase(
 
 export type UserRole = 'super_admin' | 'admin' | 'nazim' | 'teacher' | 'student' | 'parent'
 
-// In-memory rate limiter + Lockout mechanism
-const rateLimitMap = new Map<string, { count: number, resetTime: number }>()
-const lockoutMap = new Map<string, { failedAttempts: number, lockedUntil: number }>()
+// Upstash Redis setup
+const redis = Redis.fromEnv()
 
-const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000 // 15 minutes
+// Create ratelimiters
+// For standard actions: 10 requests per 15 minutes
+const defaultLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(10, '15 m'),
+  analytics: true,
+})
+
+// For strict actions (reset password, signup): 3 requests per 15 minutes
+const strictLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(3, '15 m'),
+  analytics: true,
+})
+
 const LOCKOUT_THRESHOLD = 5
-const LOCKOUT_DURATION_MS = 15 * 60 * 1000 // 15 minutes lockout
+const LOCKOUT_DURATION_S = 15 * 60 // 15 minutes in seconds
 
-async function checkRateLimit(actionName: string, maxRequests: number = 5) {
-  const headersList = await headers()
-  const ip = headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || 'anonymous'
-  const key = `${actionName}:${ip}`
-  const now = Date.now()
+export async function getAppOrigin(): Promise<string> {
+  try {
+    const headersList = await headers()
+    const host = headersList.get('x-forwarded-host') || headersList.get('host')
+    const proto = headersList.get('x-forwarded-proto') || (host?.includes('localhost') ? 'http' : 'https')
+    if (host) {
+      return `${proto}://${host}`
+    }
+  } catch (_) {}
+  return process.env.NEXT_PUBLIC_APP_URL || 'https://jamia-management-system-utb9.vercel.app'
+}
 
-  const current = rateLimitMap.get(key)
-  if (!current || now > current.resetTime) {
-    rateLimitMap.set(key, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS })
-    return true
+async function checkRateLimit(actionName: string, strict: boolean = false) {
+  try {
+    const headersList = await headers()
+    const ip = headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || 'anonymous'
+    const key = `ratelimit:${actionName}:${ip}`
+    
+    const limiter = strict ? strictLimiter : defaultLimiter
+    const { success } = await limiter.limit(key)
+    return success
+  } catch (error) {
+    console.error('Rate limit error (falling back to allow):', error)
+    return true // fail open if Redis is down
   }
-
-  if (current.count >= maxRequests) {
-    return false
-  }
-
-  current.count++
-  return true
 }
 
 export async function login(prevState: any, formData: FormData) {
   // Rate limit: 10 attempts per 15 minutes per IP
-  if (!(await checkRateLimit('login', 10))) {
+  if (!(await checkRateLimit('login', false))) {
     return { error: 'Too many login attempts from this network. Please try again in 15 minutes.' }
   }
 
@@ -56,41 +78,51 @@ export async function login(prevState: any, formData: FormData) {
     return { error: 'Email and password are required' }
   }
 
-  // Check account lockout
-  const now = Date.now()
-  const lockoutState = lockoutMap.get(email)
-  if (lockoutState && lockoutState.lockedUntil > now) {
-    const minutesLeft = Math.ceil((lockoutState.lockedUntil - now) / 60000)
-    return { error: `Account is temporarily locked due to repeated failed attempts. Try again in ${minutesLeft} minute(s).` }
-  }
+  // Check account lockout via Upstash Redis
+  const lockoutKey = `lockout:${email}`
+  let failedAttempts = 0
+  
+  try {
+    const isLocked = await redis.get(lockoutKey)
+    if (isLocked === 'locked') {
+      return { error: 'Account is temporarily locked due to repeated failed attempts. Try again in 15 minutes.' }
+    }
+    failedAttempts = (await redis.get(`fails:${email}`)) || 0
+  } catch (_) {}
 
   const supabase = await createClient()
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
   if (error) {
-    const currentFails = (lockoutState?.failedAttempts || 0) + 1
-    if (currentFails >= LOCKOUT_THRESHOLD) {
-      lockoutMap.set(email, { failedAttempts: currentFails, lockedUntil: now + LOCKOUT_DURATION_MS })
-      
-      // Log to audit logs using admin client
-      try {
-        const adminClient = createAdminClient()
-        await (adminClient.from('audit_logs') as any).insert({
-          actor_email: email,
-          action: 'ACCOUNT_LOCKOUT',
-          details: { reason: 'Exceeded maximum failed login attempts', ip: 'hidden' }
-        })
-      } catch (_) {}
-      
-      return { error: 'Account locked due to too many failed attempts. Try again in 15 minutes.' }
-    } else {
-      lockoutMap.set(email, { failedAttempts: currentFails, lockedUntil: 0 })
-    }
+    failedAttempts++
+    try {
+      if (failedAttempts >= LOCKOUT_THRESHOLD) {
+        await redis.set(lockoutKey, 'locked', { ex: LOCKOUT_DURATION_S })
+        await redis.del(`fails:${email}`) // reset fails once locked
+        
+        // Log to audit logs using admin client
+        try {
+          const adminClient = createAdminClient()
+          await (adminClient.from('audit_logs') as any).insert({
+            actor_email: email,
+            action: 'ACCOUNT_LOCKOUT',
+            details: { reason: 'Exceeded maximum failed login attempts', ip: 'hidden' }
+          })
+        } catch (_) {}
+        
+        return { error: 'Account locked due to too many failed attempts. Try again in 15 minutes.' }
+      } else {
+        await redis.set(`fails:${email}`, failedAttempts, { ex: LOCKOUT_DURATION_S })
+      }
+    } catch (_) {}
     return { error: error.message }
   }
 
   // Success: clear lockout
-  lockoutMap.delete(email)
+  try {
+    await redis.del(`fails:${email}`)
+    await redis.del(lockoutKey)
+  } catch (_) {}
 
   const { data: profile } = await (supabase
     .from('profiles')
@@ -127,7 +159,7 @@ export async function login(prevState: any, formData: FormData) {
 }
 
 export async function signup(prevState: any, formData: FormData) {
-  if (!(await checkRateLimit('signup', 5))) {
+  if (!(await checkRateLimit('signup', true))) {
     return { error: 'Too many signup attempts. Please try again later.' }
   }
 
@@ -263,7 +295,7 @@ export async function signup(prevState: any, formData: FormData) {
 
   // Notify Super Admin of pending registration
   try {
-    const origin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const origin = await getAppOrigin()
     await sendEmail({
       to: SUPER_ADMIN_EMAIL,
       subject: `New ${role.toUpperCase()} Registration Pending Approval — ${fullNameEn}`,
@@ -352,7 +384,7 @@ export async function createAdminBySuperAdmin(formData: FormData) {
 
     // Send welcome email with login details
     try {
-      const origin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      const origin = await getAppOrigin()
       await sendEmail({
         to: email,
         subject: `Your Jamia LMS Administrative Account (${role.toUpperCase()})`,
@@ -391,7 +423,7 @@ export async function logout(locale: string) {
 
 export async function resetPassword(prevState: any, formData: FormData) {
   // Stricter limit on password resets (e.g. 3 per 15 min)
-  if (!(await checkRateLimit('resetPassword', 3))) {
+  if (!(await checkRateLimit('resetPassword', true))) {
     return { error: 'Too many reset attempts. Please try again later.' }
   }
 
@@ -401,15 +433,20 @@ export async function resetPassword(prevState: any, formData: FormData) {
     return { error: 'Email is required' }
   }
 
-  const origin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  const headersList = await headers()
+  const referer = headersList.get('referer') || ''
+  const locale = referer.includes('/ur/') ? 'ur' : 'en'
+
+  const origin = await getAppOrigin()
   const adminClient = createAdminClient()
 
-  // Generate recovery link via Supabase Admin API (bypasses Supabase default email limits)
+  // Generate recovery link via Supabase Admin API with callback redirectTo
+  const callbackUrl = `${origin}/api/auth/callback?next=/${locale}/update-password`
   const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
     type: 'recovery',
     email,
     options: {
-      redirectTo: `${origin}/en/update-password`,
+      redirectTo: callbackUrl,
     },
   })
 
@@ -461,7 +498,7 @@ export async function resetPassword(prevState: any, formData: FormData) {
 }
 
 export async function updatePassword(prevState: any, formData: FormData) {
-  if (!(await checkRateLimit('updatePassword', 5))) {
+  if (!(await checkRateLimit('updatePassword', true))) {
     return { error: 'Too many attempts. Please try again later.' }
   }
 

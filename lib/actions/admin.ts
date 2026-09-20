@@ -16,6 +16,7 @@ async function requireSuperAdmin() {
 }
 
 import { sendEmail } from '../communication'
+import { getAppOrigin } from './auth'
 
 export async function approveUser(profileId: string) {
   const { supabase, user } = await requireSuperAdmin()
@@ -45,11 +46,10 @@ export async function approveUser(profileId: string) {
       details: { approved: true },
     })
   } catch (_) {}
-
   // Send approval email via Nodemailer
   if (targetEmail) {
     try {
-      const origin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      const origin = await getAppOrigin()
       const name = profile?.full_name_en || 'User'
       await sendEmail({
         to: targetEmail,

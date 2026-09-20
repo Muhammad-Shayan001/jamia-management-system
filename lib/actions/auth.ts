@@ -47,15 +47,24 @@ const LOCKOUT_THRESHOLD = 5
 const LOCKOUT_DURATION_S = 15 * 60 // 15 minutes in seconds
 
 export async function getAppOrigin(): Promise<string> {
+  // Always prefer the explicit env variable pointing to the production URL
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL
+  if (envUrl && !envUrl.includes('localhost')) {
+    return envUrl.replace(/\/$/, '') // strip trailing slash
+  }
+
+  // On Vercel, x-forwarded-host is reliably set
   try {
     const headersList = await headers()
     const host = headersList.get('x-forwarded-host') || headersList.get('host')
     const proto = headersList.get('x-forwarded-proto') || (host?.includes('localhost') ? 'http' : 'https')
-    if (host) {
+    if (host && !host.includes('localhost')) {
       return `${proto}://${host}`
     }
   } catch (_) {}
-  return process.env.NEXT_PUBLIC_APP_URL || 'https://jamia-management-system-utb9.vercel.app'
+
+  // Hard-coded deployed URL as last-resort fallback (NEVER localhost)
+  return 'https://jamia-management-system-utb9.vercel.app'
 }
 
 async function checkRateLimit(actionName: string, strict: boolean = false) {
@@ -147,7 +156,11 @@ export async function login(prevState: any, formData: FormData) {
     .eq('id', data.user.id)
     .single()) as any
 
+  console.log('--- DEBUG login() ---')
+  console.log('Raw profile object:', profile)
+
   let role: UserRole = profile?.role || 'student'
+  console.log('Resolved role:', role)
 
   if (email === SUPER_ADMIN_EMAIL) {
     role = 'super_admin'

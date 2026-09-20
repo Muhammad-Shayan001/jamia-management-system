@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
@@ -14,17 +14,17 @@ export function PublicHeader() {
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-6">
           <Link href={`/${lang}`} className="text-xl font-bold text-primary">
-            {isUrdu ? 'جامعہ مینجمنٹ' : 'Jamia LMS'}
+            {isUrdu ? '????? ???????' : 'Jamia LMS'}
           </Link>
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
             <Link href={`/${lang}/about`} className="hover:text-primary transition-colors">
-              {isUrdu ? 'ہمارے بارے میں' : 'About'}
+              {isUrdu ? '????? ???? ???' : 'About'}
             </Link>
             <Link href={`/${lang}/admissions`} className="hover:text-primary transition-colors">
-              {isUrdu ? 'داخلہ' : 'Admissions'}
+              {isUrdu ? '?????' : 'Admissions'}
             </Link>
             <Link href={`/${lang}/contact`} className="hover:text-primary transition-colors">
-              {isUrdu ? 'رابطہ کریں' : 'Contact'}
+              {isUrdu ? '????? ????' : 'Contact'}
             </Link>
           </nav>
         </div>
@@ -36,10 +36,10 @@ export function PublicHeader() {
             <Link href="/ur" className={`px-2 ${isUrdu ? 'font-bold' : ''}`}>UR</Link>
           </div>
           <Link href={`/${lang}/login`}>
-            <Button variant="outline">{isUrdu ? 'لاگ ان' : 'Log In'}</Button>
+            <Button variant="outline">{isUrdu ? '??? ??' : 'Log In'}</Button>
           </Link>
           <Link href={`/${lang}/admissions`}>
-            <Button>{isUrdu ? 'اپلائی کریں' : 'Apply Now'}</Button>
+            <Button>{isUrdu ? '?????? ????' : 'Apply Now'}</Button>
           </Link>
         </div>
       </div>

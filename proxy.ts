@@ -111,7 +111,6 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  // Determine effective role
   let userRole = 'student'
   if (user.email?.toLowerCase() === SUPER_ADMIN_EMAIL) {
     userRole = 'super_admin'
@@ -121,10 +120,16 @@ export async function proxy(request: NextRequest) {
       .select('role')
       .eq('id', user.id)
       .single()
+    
+    console.log('--- DEBUG proxy.ts ---')
+    console.log('User ID:', user.id)
+    console.log('Raw profile object:', profile)
+    
     if (profile?.role) {
       userRole = profile.role
     }
   }
+  console.log('Resolved userRole in proxy:', userRole)
 
   // If authenticated and hitting login or root, redirect to role portal
   if (pathAfterLocale === '/login' || pathAfterLocale === '/' || pathAfterLocale === '') {
@@ -141,6 +146,8 @@ export async function proxy(request: NextRequest) {
     '/admin': ['admin', 'nazim', 'super_admin'],
     '/teacher': ['teacher', 'super_admin'],
     '/student': ['student', 'parent', 'super_admin'],
+    '/accountant': ['accountant', 'nazim', 'admin', 'super_admin'],
+    '/receptionist': ['receptionist', 'nazim', 'admin', 'super_admin'],
   }
 
   let requiredRoles: string[] | null = null

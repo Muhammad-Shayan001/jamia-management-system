@@ -25,10 +25,17 @@ const QuestionSchema = z.object({
   marks: z.coerce.number().min(0.5).default(1),
 })
 
+// ─── createQuiz ───────────────────────────────────────────────
 export async function createQuiz(prevState: any, formData: FormData) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
+
+  // FIX 2 — role check (same pattern as hifz.ts)
+  const { data: profile } = await (supabase.from('profiles').select('role').eq('id', user.id).single() as any)
+  if (!['teacher', 'admin', 'nazim', 'super_admin'].includes(profile?.role)) {
+    return { error: 'Unauthorized: only teachers and admins can create quizzes' }
+  }
 
   const parsed = QuizSchema.safeParse({
     title_en: formData.get('title_en'),
@@ -40,6 +47,20 @@ export async function createQuiz(prevState: any, formData: FormData) {
   if (!parsed.success) return { error: parsed.error.issues[0].message }
 
   const { data: teacher } = await (supabase.from('teachers').select('id').eq('profile_id', user.id).single() as any)
+
+  // If teacher, verify they actually teach the target class
+  if (profile?.role === 'teacher') {
+    if (!teacher) return { error: 'Teacher profile not found' }
+    const { data: classAssign } = await (supabase
+      .from('class_teacher_assignments')
+      .select('id')
+      .eq('teacher_id', teacher.id)
+      .eq('class_id', parsed.data.class_id)
+      .single() as any)
+    if (!classAssign) {
+      return { error: 'Unauthorized: you can only create quizzes for classes you teach' }
+    }
+  }
 
   const adminClient = createAdminClient()
   const { data: quiz, error } = await (adminClient.from('quizzes') as any).insert({
@@ -54,6 +75,7 @@ export async function createQuiz(prevState: any, formData: FormData) {
   return { success: true, quizId: quiz.id }
 }
 
+// ─── addQuizQuestion ──────────────────────────────────────────
 export async function addQuizQuestion(quizId: string, prevState: any, formData: FormData) {
   const parsed = QuestionSchema.safeParse({
     question_text: formData.get('question_text'),
@@ -70,7 +92,22 @@ export async function addQuizQuestion(quizId: string, prevState: any, formData: 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
+  // FIX 2 — role check
+  const { data: profile } = await (supabase.from('profiles').select('role').eq('id', user.id).single() as any)
+  if (!['teacher', 'admin', 'nazim', 'super_admin'].includes(profile?.role)) {
+    return { error: 'Unauthorized' }
+  }
+
   const adminClient = createAdminClient()
+
+  // If teacher, verify they own the quiz by fetching the quiz row first
+  if (profile?.role === 'teacher') {
+    const { data: teacher } = await (supabase.from('teachers').select('id').eq('profile_id', user.id).single() as any)
+    const { data: quiz } = await (adminClient.from('quizzes').select('teacher_id').eq('id', quizId).single() as any)
+    if (!quiz || quiz.teacher_id !== teacher?.id) {
+      return { error: 'Unauthorized: you can only add questions to your own quizzes' }
+    }
+  }
 
   // Get current question count for sort_order
   const { count } = await (adminClient.from('quiz_questions') as any)
@@ -90,20 +127,37 @@ export async function addQuizQuestion(quizId: string, prevState: any, formData: 
   return { success: true }
 }
 
+// ─── publishQuiz ──────────────────────────────────────────────
 export async function publishQuiz(quizId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
+  // FIX 2 — role check + ownership check
+  const { data: profile } = await (supabase.from('profiles').select('role').eq('id', user.id).single() as any)
+  if (!['teacher', 'admin', 'nazim', 'super_admin'].includes(profile?.role)) {
+    return { error: 'Unauthorized' }
+  }
+
+  const adminClient = createAdminClient()
+
+  // If teacher, verify quiz ownership
+  if (profile?.role === 'teacher') {
+    const { data: teacher } = await (supabase.from('teachers').select('id').eq('profile_id', user.id).single() as any)
+    const { data: quiz } = await (adminClient.from('quizzes').select('teacher_id').eq('id', quizId).single() as any)
+    if (!quiz || quiz.teacher_id !== teacher?.id) {
+      return { error: 'Unauthorized: you can only publish your own quizzes' }
+    }
+  }
+
   // Calculate total_marks from questions
-  const { data: questions } = await (supabase
+  const { data: questions } = await (adminClient
     .from('quiz_questions')
     .select('marks')
     .eq('quiz_id', quizId) as any)
 
   const total = (questions || []).reduce((sum: number, q: any) => sum + (q.marks || 1), 0)
 
-  const adminClient = createAdminClient()
   const { error } = await (adminClient.from('quizzes') as any)
     .update({ is_published: true, total_marks: total })
     .eq('id', quizId)
@@ -113,10 +167,17 @@ export async function publishQuiz(quizId: string) {
   return { success: true }
 }
 
+// ─── startQuizAttempt ─────────────────────────────────────────
 export async function startQuizAttempt(quizId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
+
+  // FIX 2 — restrict to student role only
+  const { data: profile } = await (supabase.from('profiles').select('role').eq('id', user.id).single() as any)
+  if (profile?.role !== 'student') {
+    return { error: 'Unauthorized: only students can attempt quizzes' }
+  }
 
   const { data: student } = await (supabase.from('students').select('id').eq('profile_id', user.id).single() as any)
   if (!student) return { error: 'Student profile not found' }
@@ -142,19 +203,37 @@ export async function startQuizAttempt(quizId: string) {
   return { success: true, attemptId: attempt.id }
 }
 
+// ─── submitQuiz ───────────────────────────────────────────────
+// FIX 4 — runs entirely via adminClient so we can tighten student-facing
+// RLS on quiz_attempts to disallow direct UPDATE of score/is_correct.
+// The correct_option is fetched server-side here and never exposed to the client.
 export async function submitQuiz(attemptId: string, answers: Record<string, string>) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
+  // Restrict to student role
+  const { data: profile } = await (supabase.from('profiles').select('role').eq('id', user.id).single() as any)
+  if (profile?.role !== 'student') {
+    return { error: 'Unauthorized: only students can submit quiz attempts' }
+  }
+
+  // Verify the attempt belongs to this student before writing anything
+  const { data: student } = await (supabase.from('students').select('id').eq('profile_id', user.id).single() as any)
+  if (!student) return { error: 'Student profile not found' }
+
   const adminClient = createAdminClient()
 
-  // Get quiz questions with correct answers
   const { data: attempt } = await (adminClient.from('quiz_attempts') as any)
-    .select('quiz_id')
+    .select('quiz_id, student_id, submitted_at')
     .eq('id', attemptId)
     .single()
 
+  if (!attempt) return { error: 'Attempt not found' }
+  if (attempt.student_id !== student.id) return { error: 'Unauthorized: this attempt does not belong to you' }
+  if (attempt.submitted_at) return { error: 'This quiz has already been submitted.' }
+
+  // Fetch correct answers server-side (FIX 3 — correct_option never goes to client)
   const { data: questions } = await (adminClient.from('quiz_questions') as any)
     .select('id, correct_option, marks')
     .eq('quiz_id', attempt.quiz_id)
@@ -223,8 +302,44 @@ export async function getQuizzesForStudent() {
   return data || []
 }
 
+// FIX 3 — getQuizWithQuestions for the take-quiz page:
+// Never returns correct_option — the column is excluded from the SELECT.
+// correct_option is only fetched inside submitQuiz (server-side, adminClient).
+export async function getQuizWithQuestionsForStudent(quizId: string) {
+  const supabase = await createClient()
+
+  // Verify caller is a student
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data: profile } = await (supabase.from('profiles').select('role').eq('id', user.id).single() as any)
+  if (profile?.role !== 'student') return null
+
+  const { data } = await (supabase
+    .from('quizzes')
+    .select(`
+      id, title_en, title_ur, duration_mins, total_marks,
+      quiz_questions (
+        id, question_text, option_a, option_b, option_c, option_d, marks, sort_order
+      )
+    `)
+    .eq('id', quizId)
+    .eq('is_published', true)
+    .single() as any)
+  // Note: correct_option is intentionally NOT selected
+  return data
+}
+
+// Full quiz data (including correct_option) for teachers/admins only
 export async function getQuizWithQuestions(quizId: string) {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data: profile } = await (supabase.from('profiles').select('role').eq('id', user.id).single() as any)
+  if (!['teacher', 'admin', 'nazim', 'super_admin'].includes(profile?.role)) {
+    return null
+  }
+
   const { data } = await (supabase
     .from('quizzes')
     .select('*, quiz_questions(*)')

@@ -58,21 +58,8 @@ const NAV_CONFIGS: Record<
     ]
   },
   admin: (lang) => {
-    const isUr = lang === 'ur'
-    return [
-      { name: isUr ? 'ڈیش بورڈ' : 'Dashboard', href: `/${lang}/admin/dashboard`, icon: LayoutDashboard },
-      { name: isUr ? 'طلباء' : 'Students', href: `/${lang}/admin/students`, icon: Users },
-      { name: isUr ? 'اساتذہ' : 'Teachers', href: `/${lang}/admin/teachers`, icon: UserCog },
-      { name: isUr ? 'کتب خانہ' : 'Digital Library', href: `/${lang}/admin/library`, icon: BookOpen },
-      { name: isUr ? 'حفظ / تجوید' : 'Hifz Tracker', href: `/${lang}/admin/hifz`, icon: Sparkles },
-      { name: isUr ? 'شناختی کارڈز' : 'ID Cards & Print', href: `/${lang}/admin/id-cards`, icon: CreditCard },
-      { name: isUr ? 'کلاسز' : 'Classes', href: `/${lang}/admin/classes`, icon: GraduationCap },
-      { name: isUr ? 'حاضری' : 'Attendance', href: `/${lang}/admin/attendance`, icon: Calendar },
-      { name: isUr ? 'امتحانی نتائج' : 'Results', href: `/${lang}/admin/results`, icon: FileText },
-      { name: isUr ? 'فیس مینجمنٹ' : 'Fees', href: `/${lang}/admin/fees`, icon: Wallet },
-      { name: isUr ? 'ٹائم ٹیبل' : 'Timetable', href: `/${lang}/admin/timetable`, icon: CalendarCheck },
-      { name: isUr ? 'اعلانات' : 'Announcements', href: `/${lang}/admin/announcements`, icon: MessageSquare },
-    ]
+    // This is a fallback. The actual Admin nav is computed dynamically in PortalShell below based on pathname.
+    return []
   },
   teacher: (lang) => {
     const isUr = lang === 'ur'
@@ -159,8 +146,39 @@ export function PortalShell({
 
   useEffect(() => setMounted(true), [])
 
-  const navItems = NAV_CONFIGS[portalType](lang)
-  const portalName = PORTAL_TITLES[portalType][isRtl ? 'ur' : 'en']
+  let navItems = NAV_CONFIGS[portalType](lang)
+  let portalName = PORTAL_TITLES[portalType][isRtl ? 'ur' : 'en']
+
+  if (portalType === 'admin') {
+    if (pathname.includes('/admin/campus')) {
+      navItems = [
+        { name: isRtl ? 'ڈیش بورڈ' : 'Overview', href: `/${lang}/admin/dashboard`, icon: LayoutDashboard },
+        { name: isRtl ? 'فیس مینجمنٹ' : 'Fees', href: `/${lang}/admin/campus/fees`, icon: Wallet },
+        { name: isRtl ? 'شناختی کارڈز' : 'ID Cards', href: `/${lang}/admin/campus/id-cards`, icon: CreditCard },
+        { name: isRtl ? 'اعلانات' : 'Announcements', href: `/${lang}/admin/campus/announcements`, icon: MessageSquare },
+        { name: isRtl ? 'اسٹاف مینجمنٹ' : 'Staff Accounts', href: `/${lang}/super-admin/admins`, icon: Shield },
+      ]
+      portalName = isRtl ? 'کیمپس مینجمنٹ' : 'Campus Management'
+    } else if (pathname.includes('/admin/lms')) {
+      navItems = [
+        { name: isRtl ? 'ڈیش بورڈ' : 'Overview', href: `/${lang}/admin/dashboard`, icon: LayoutDashboard },
+        { name: isRtl ? 'کلاسز' : 'Classes', href: `/${lang}/admin/lms/classes`, icon: GraduationCap },
+        { name: isRtl ? 'طلباء' : 'Students', href: `/${lang}/admin/lms/students`, icon: Users },
+        { name: isRtl ? 'اساتذہ' : 'Teachers', href: `/${lang}/admin/lms/teachers`, icon: UserCog },
+        { name: isRtl ? 'حاضری' : 'Attendance', href: `/${lang}/admin/lms/attendance`, icon: Calendar },
+        { name: isRtl ? 'ٹائم ٹیبل' : 'Timetable', href: `/${lang}/admin/lms/timetable`, icon: CalendarCheck },
+        { name: isRtl ? 'نتائج' : 'Results', href: `/${lang}/admin/lms/results`, icon: FileText },
+        { name: isRtl ? 'حفظ / تجوید' : 'Hifz Tracker', href: `/${lang}/admin/lms/hifz`, icon: Sparkles },
+        { name: isRtl ? 'کتب خانہ' : 'Library', href: `/${lang}/admin/lms/library`, icon: BookOpen },
+      ]
+      portalName = isRtl ? 'تعلیمی نظام (LMS)' : 'LMS Portal'
+    } else {
+      navItems = [
+        { name: isRtl ? 'ڈیش بورڈ' : 'Overview', href: `/${lang}/admin/dashboard`, icon: LayoutDashboard },
+      ]
+      portalName = isRtl ? 'ایڈمن پورٹل' : 'Admin Portal'
+    }
+  }
 
   const switchLocale = () => {
     const newLang = lang === 'en' ? 'ur' : 'en'

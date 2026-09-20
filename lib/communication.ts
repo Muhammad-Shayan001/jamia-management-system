@@ -1,4 +1,4 @@
-﻿import nodemailer from 'nodemailer'
+import nodemailer from 'nodemailer'
 
 // Initialize Nodemailer Transport
 const transporter = nodemailer.createTransport({
@@ -45,7 +45,7 @@ export async function sendWhatsApp({
   const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID
 
   if (!token || token.includes('your_')) {
-    console.log(`💬 [Mock WhatsApp] Would send template '${templateName}' to ${to}`)
+    console.log(`?? [Mock WhatsApp] Would send template '${templateName}' to ${to}`)
     return { success: true, mock: true }
   }
 

@@ -1,8 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
-import { Card, CardContent } from '@/components/ui/card'
 import { redirect } from 'next/navigation'
 import { TakeQuizForm } from './TakeQuizForm'
-import { startQuizAttempt } from '@/lib/actions/quizzes'
+import { startQuizAttempt, getQuizWithQuestionsForStudent } from '@/lib/actions/quizzes'
 
 export default async function TakeQuizPage({
   params
@@ -10,9 +8,8 @@ export default async function TakeQuizPage({
   params: Promise<{ lang: string; id: string }>
 }) {
   const { lang, id } = await params
-  const supabase = await createClient()
 
-  // Start or get existing attempt
+  // Start or get existing attempt — already has role check inside
   const attemptRes = await startQuizAttempt(id)
   if (attemptRes.error && attemptRes.error !== 'You have already completed this quiz.') {
     return <div className="text-center py-20 text-red-500">{attemptRes.error}</div>
@@ -21,14 +18,9 @@ export default async function TakeQuizPage({
     redirect(`/${lang}/student/quizzes`)
   }
 
-  // Fetch quiz & questions
-  const { data: quiz } = await (supabase
-    .from('quizzes')
-    .select('*, quiz_questions(*)')
-    .eq('id', id)
-    .single() as any)
-
-  if (!quiz) return <div className="text-center py-20 text-muted-foreground">Quiz not found.</div>
+  // FIX 3 — use the student-safe function that NEVER returns correct_option
+  const quiz = await getQuizWithQuestionsForStudent(id)
+  if (!quiz) return <div className="text-center py-20 text-muted-foreground">Quiz not found or access denied.</div>
 
   const questions = (quiz.quiz_questions || []).sort((a: any, b: any) => a.sort_order - b.sort_order)
 

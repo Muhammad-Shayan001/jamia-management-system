@@ -47,7 +47,7 @@ export async function upsertHifzProgress(prevState: any, formData: FormData) {
 
   if (error) return { error: error.message }
   revalidatePath('/teacher/hifz')
-  revalidatePath('/admin/hifz')
+  revalidatePath('/admin/lms/hifz')
   revalidatePath('/student/hifz')
   return { success: true }
 }

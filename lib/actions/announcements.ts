@@ -87,7 +87,7 @@ export async function postAnnouncement(formData: FormData) {
 
   revalidatePath('/en/admin/dashboard')
   revalidatePath('/ur/admin/dashboard')
-  revalidatePath('/en/admin/announcements')
-  revalidatePath('/ur/admin/announcements')
+  revalidatePath('/en/admin/campus/announcements')
+  revalidatePath('/ur/admin/campus/announcements')
   return { success: true }
 }

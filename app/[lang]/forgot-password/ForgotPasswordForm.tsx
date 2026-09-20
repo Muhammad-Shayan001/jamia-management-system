@@ -1,6 +1,7 @@
-﻿'use client'
+'use client'
 
 import { useActionState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,6 +12,8 @@ import Link from 'next/link'
 export default function ForgotPasswordForm({ lang }: { lang: string }) {
   const isUrdu = lang === 'ur'
   const [state, formAction, isPending] = useActionState(resetPassword, null)
+  const searchParams = useSearchParams()
+  const linkExpired = searchParams.get('error') === 'link_expired'
 
   return (
     <div className="w-full">
@@ -29,6 +32,17 @@ export default function ForgotPasswordForm({ lang }: { lang: string }) {
       </div>
 
       <form action={formAction} className="space-y-5">
+        {linkExpired && !state?.error && (
+          <div className="p-4 bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-xl flex items-start gap-3 animate-in fade-in zoom-in-95 duration-300">
+            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+              {isUrdu
+                ? 'آپ کا پاس ورڈ ری سیٹ لنک میعاد ختم ہو گئی ہے۔ نیا لنک حاصل کریں۔'
+                : 'Your password reset link has expired. Please request a new one below.'}
+            </p>
+          </div>
+        )}
+
         {state?.error && (
           <div className="p-4 bg-red-50/80 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-xl flex items-start gap-3 animate-in fade-in zoom-in-95 duration-300">
             <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />

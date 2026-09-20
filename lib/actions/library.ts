@@ -45,7 +45,7 @@ export async function addBook(prevState: any, formData: FormData) {
   })
 
   if (error) return { error: error.message }
-  revalidatePath('/admin/library')
+  revalidatePath('/admin/lms/library')
   revalidatePath('/student/library')
   revalidatePath('/teacher/library')
   return { success: true }
@@ -62,7 +62,7 @@ export async function deactivateBook(bookId: string) {
     .eq('id', bookId)
 
   if (error) return { error: error.message }
-  revalidatePath('/admin/library')
+  revalidatePath('/admin/lms/library')
   return { success: true }
 }
 

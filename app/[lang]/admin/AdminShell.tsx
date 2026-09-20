@@ -19,12 +19,12 @@ export function AdminShell({ children, dict, lang }: { children: React.ReactNode
 
   const navItems = [
     { name: dict.nav.dashboard, href: `/${lang}/admin/dashboard`, icon: LayoutDashboard },
-    { name: dict.nav.students, href: `/${lang}/admin/students`, icon: Users },
-    { name: dict.nav.teachers, href: `/${lang}/admin/teachers`, icon: UserCog },
-    { name: dict.nav.classes, href: `/${lang}/admin/classes`, icon: GraduationCap },
-    { name: dict.nav.attendance, href: `/${lang}/admin/attendance`, icon: Calendar },
-    { name: dict.nav.results, href: `/${lang}/admin/results`, icon: FileText },
-    { name: dict.nav.fees, href: `/${lang}/admin/fees`, icon: Wallet },
+    { name: dict.nav.students, href: `/${lang}/admin/lms/students`, icon: Users },
+    { name: dict.nav.teachers, href: `/${lang}/admin/lms/teachers`, icon: UserCog },
+    { name: dict.nav.classes, href: `/${lang}/admin/lms/classes`, icon: GraduationCap },
+    { name: dict.nav.attendance, href: `/${lang}/admin/lms/attendance`, icon: Calendar },
+    { name: dict.nav.results, href: `/${lang}/admin/lms/results`, icon: FileText },
+    { name: dict.nav.fees, href: `/${lang}/admin/campus/fees`, icon: Wallet },
   ]
 
   const switchLocale = () => {

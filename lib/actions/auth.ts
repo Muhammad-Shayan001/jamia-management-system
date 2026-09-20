@@ -14,25 +14,34 @@ if (!process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL) {
 }
 const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL.toLowerCase()
 
-export type UserRole = 'super_admin' | 'admin' | 'nazim' | 'teacher' | 'student' | 'parent'
+export type UserRole = 'super_admin' | 'admin' | 'nazim' | 'teacher' | 'student' | 'parent' | 'accountant' | 'receptionist'
 
 // Upstash Redis setup
-const redis = Redis.fromEnv()
+let redis: Redis | null = null;
+let defaultLimiter: Ratelimit | null = null;
+let strictLimiter: Ratelimit | null = null;
 
-// Create ratelimiters
-// For standard actions: 10 requests per 15 minutes
-const defaultLimiter = new Ratelimit({
-  redis,
-  limiter: Ratelimit.slidingWindow(10, '15 m'),
-  analytics: true,
-})
+try {
+  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+    redis = Redis.fromEnv()
+    // Create ratelimiters
+    // For standard actions: 10 requests per 15 minutes
+    defaultLimiter = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(10, '15 m'),
+      analytics: true,
+    })
 
-// For strict actions (reset password, signup): 3 requests per 15 minutes
-const strictLimiter = new Ratelimit({
-  redis,
-  limiter: Ratelimit.slidingWindow(3, '15 m'),
-  analytics: true,
-})
+    // For strict actions (reset password, signup): 3 requests per 15 minutes
+    strictLimiter = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(3, '15 m'),
+      analytics: true,
+    })
+  }
+} catch (e) {
+  console.warn("Redis initialization failed, falling back to no rate limiting.", e)
+}
 
 const LOCKOUT_THRESHOLD = 5
 const LOCKOUT_DURATION_S = 15 * 60 // 15 minutes in seconds
@@ -56,6 +65,8 @@ async function checkRateLimit(actionName: string, strict: boolean = false) {
     const key = `ratelimit:${actionName}:${ip}`
     
     const limiter = strict ? strictLimiter : defaultLimiter
+    if (!limiter) return true; // fail open if no redis
+
     const { success } = await limiter.limit(key)
     return success
   } catch (error) {
@@ -82,47 +93,53 @@ export async function login(prevState: any, formData: FormData) {
   const lockoutKey = `lockout:${email}`
   let failedAttempts = 0
   
-  try {
-    const isLocked = await redis.get(lockoutKey)
-    if (isLocked === 'locked') {
-      return { error: 'Account is temporarily locked due to repeated failed attempts. Try again in 15 minutes.' }
-    }
-    failedAttempts = (await redis.get(`fails:${email}`)) || 0
-  } catch (_) {}
+  if (redis) {
+    try {
+      const isLocked = await redis.get(lockoutKey)
+      if (isLocked === 'locked') {
+        return { error: 'Account is temporarily locked due to repeated failed attempts. Try again in 15 minutes.' }
+      }
+      failedAttempts = (await redis.get(`fails:${email}`)) as number || 0
+    } catch (_) {}
+  }
 
   const supabase = await createClient()
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
   if (error) {
     failedAttempts++
-    try {
-      if (failedAttempts >= LOCKOUT_THRESHOLD) {
-        await redis.set(lockoutKey, 'locked', { ex: LOCKOUT_DURATION_S })
-        await redis.del(`fails:${email}`) // reset fails once locked
-        
-        // Log to audit logs using admin client
-        try {
-          const adminClient = createAdminClient()
-          await (adminClient.from('audit_logs') as any).insert({
-            actor_email: email,
-            action: 'ACCOUNT_LOCKOUT',
-            details: { reason: 'Exceeded maximum failed login attempts', ip: 'hidden' }
-          })
-        } catch (_) {}
-        
-        return { error: 'Account locked due to too many failed attempts. Try again in 15 minutes.' }
-      } else {
-        await redis.set(`fails:${email}`, failedAttempts, { ex: LOCKOUT_DURATION_S })
-      }
-    } catch (_) {}
+    if (redis) {
+      try {
+        if (failedAttempts >= LOCKOUT_THRESHOLD) {
+          await redis.set(lockoutKey, 'locked', { ex: LOCKOUT_DURATION_S })
+          await redis.del(`fails:${email}`) // reset fails once locked
+          
+          // Log to audit logs using admin client
+          try {
+            const adminClient = createAdminClient()
+            await (adminClient.from('audit_logs') as any).insert({
+              actor_email: email,
+              action: 'ACCOUNT_LOCKOUT',
+              details: { reason: 'Exceeded maximum failed login attempts', ip: 'hidden' }
+            })
+          } catch (_) {}
+          
+          return { error: 'Account locked due to too many failed attempts. Try again in 15 minutes.' }
+        } else {
+          await redis.set(`fails:${email}`, failedAttempts, { ex: LOCKOUT_DURATION_S })
+        }
+      } catch (_) {}
+    }
     return { error: error.message }
   }
 
   // Success: clear lockout
-  try {
-    await redis.del(`fails:${email}`)
-    await redis.del(lockoutKey)
-  } catch (_) {}
+  if (redis) {
+    try {
+      await redis.del(`fails:${email}`)
+      await redis.del(lockoutKey)
+    } catch (_) {}
+  }
 
   const { data: profile } = await (supabase
     .from('profiles')
@@ -342,8 +359,25 @@ export async function createAdminBySuperAdmin(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
-  if (user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
-    return { error: 'Unauthorized: Only the Super Admin can create admin/nazim accounts' }
+  // Check creator's role
+  let creatorRole = 'user'
+  if (user.email?.toLowerCase() === SUPER_ADMIN_EMAIL) {
+    creatorRole = 'super_admin'
+  } else {
+    const { data: creatorProfile } = await (supabase.from('profiles').select('role').eq('id', user.id).single() as any)
+    if (creatorProfile) creatorRole = creatorProfile.role
+  }
+
+  if (!['super_admin', 'admin', 'nazim'].includes(creatorRole)) {
+    return { error: 'Unauthorized: Only administrators can create staff accounts' }
+  }
+
+  // Restrict what roles can be created
+  if (role === 'admin' && creatorRole !== 'super_admin') {
+    return { error: 'Unauthorized: Only Super Admin can create Admin accounts' }
+  }
+  if (!['admin', 'nazim', 'accountant', 'receptionist'].includes(role)) {
+    return { error: 'Invalid role for this action' }
   }
 
   const adminClient = createAdminClient()
@@ -363,7 +397,7 @@ export async function createAdminBySuperAdmin(formData: FormData) {
   if (newAuth.user) {
     await (adminClient.from('profiles') as any).upsert({
       id: newAuth.user.id,
-      role: role === 'nazim' ? 'nazim' : 'admin',
+      role: role as UserRole,
       full_name_en: fullNameEn,
       full_name_ur: fullNameUr,
       is_active: true,
@@ -440,8 +474,9 @@ export async function resetPassword(prevState: any, formData: FormData) {
   const origin = await getAppOrigin()
   const adminClient = createAdminClient()
 
-  // Generate recovery link via Supabase Admin API with callback redirectTo
-  const callbackUrl = `${origin}/api/auth/callback?next=/${locale}/update-password`
+  // Generate recovery link via Supabase Admin API with direct redirectTo
+  // We point directly to the update-password page so the #access_token hash fragment isn't lost in a server redirect
+  const callbackUrl = `${origin}/${locale}/update-password`
   const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
     type: 'recovery',
     email,

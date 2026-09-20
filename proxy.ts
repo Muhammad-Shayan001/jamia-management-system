@@ -38,6 +38,8 @@ const ROLE_PORTALS: Record<string, string> = {
   teacher: '/teacher',
   student: '/student',
   parent: '/student',
+  accountant: '/accountant',
+  receptionist: '/receptionist',
 }
 
 // Public paths that don't require auth (after locale prefix)

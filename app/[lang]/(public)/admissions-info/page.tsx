@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { ArrowRight } from 'lucide-react'
 
-export default async function AdmissionsPage({ params }: { params: Promise<{ lang: string }> }) {
+export default async function AdmissionsInfoPage({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = await params
   const isUrdu = lang === 'ur'
 
@@ -36,12 +36,12 @@ export default async function AdmissionsPage({ params }: { params: Promise<{ lan
           </h2>
           <p className="mb-6">
             {isUrdu
-              ? 'طلباء اور اساتذہ اپنے اکاؤنٹس آن لائن بنا سکتے ہیں۔'
-              : 'Students and Teachers can self-register using our online portal.'}
+              ? 'داخلے کے لیے آن لائن درخواست فارم پُر کریں۔'
+              : 'Complete the online application form to apply for admission.'}
           </p>
-          <Link href={`/${lang}/signup`}>
+          <Link href={`/${lang}/admissions`}>
             <Button size="lg" className="text-lg px-8">
-              {isUrdu ? 'رجسٹریشن فارم' : 'Go to Registration Form'}
+              {isUrdu ? 'درخواست فارم' : 'Apply Online'}
               <ArrowRight className={`w-5 h-5 ${isUrdu ? 'mr-2 rotate-180' : 'ml-2'}`} />
             </Button>
           </Link>

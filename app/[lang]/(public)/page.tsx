@@ -43,7 +43,7 @@ export default async function HomePage({ params }: { params: Promise<{ lang: str
               : 'A perfect blend of traditional Darse Nizami and modern education. Join us today to begin your journey of knowledge.'}
           </p>
           <div className="flex gap-4 flex-wrap justify-center">
-            <Link href={`/${lang}/admissions`}>
+            <Link href={`/${lang}/admissions-info`}>
               <Button size="lg" className="h-12 px-8 text-lg">
                 {isUrdu ? 'داخلہ معلومات' : 'Admissions Info'}
                 <ArrowRight className={`w-5 h-5 ${isUrdu ? 'mr-2 rotate-180' : 'ml-2'}`} />

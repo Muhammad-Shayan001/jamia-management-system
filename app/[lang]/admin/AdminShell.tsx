@@ -2,7 +2,11 @@
 
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LogOut, LayoutDashboard, Users, UserCog, GraduationCap, Calendar, FileText, Wallet, Settings, Menu, X, Moon, Sun } from 'lucide-react'
+import {
+  LogOut, LayoutDashboard, Users, UserCog, GraduationCap, Calendar, FileText,
+  Wallet, Settings, Menu, X, Moon, Sun, BookOpen, Building2, MapPin,
+  ClipboardList, Bell, Home, ShieldAlert, Award, BarChart2, Clock, ChevronDown, ChevronRight
+} from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
@@ -17,14 +21,66 @@ export function AdminShell({ children, dict, lang }: { children: React.ReactNode
 
   useEffect(() => setMounted(true), [])
 
-  const navItems = [
-    { name: dict.nav.dashboard, href: `/${lang}/admin/dashboard`, icon: LayoutDashboard },
-    { name: dict.nav.students, href: `/${lang}/admin/lms/students`, icon: Users },
-    { name: dict.nav.teachers, href: `/${lang}/admin/lms/teachers`, icon: UserCog },
-    { name: dict.nav.classes, href: `/${lang}/admin/lms/classes`, icon: GraduationCap },
-    { name: dict.nav.attendance, href: `/${lang}/admin/lms/attendance`, icon: Calendar },
-    { name: dict.nav.results, href: `/${lang}/admin/lms/results`, icon: FileText },
-    { name: dict.nav.fees, href: `/${lang}/admin/campus/fees`, icon: Wallet },
+  const [openGroups, setOpenGroups] = useState<string[]>(['academic', 'campus'])
+
+  const toggleGroup = (group: string) => {
+    setOpenGroups(prev => prev.includes(group) ? prev.filter(g => g !== group) : [...prev, group])
+  }
+
+  type NavItem = { name: string; href: string; icon: any }
+  type NavGroup = { group: string; label: string; icon: any; items: NavItem[] }
+
+  const navGroups: NavGroup[] = [
+    {
+      group: 'main',
+      label: 'Overview',
+      icon: LayoutDashboard,
+      items: [
+        { name: 'Dashboard', href: `/${lang}/admin/dashboard`, icon: LayoutDashboard },
+      ]
+    },
+    {
+      group: 'institution',
+      label: 'Institution',
+      icon: Building2,
+      items: [
+        { name: 'Campuses', href: `/${lang}/admin/campuses`, icon: MapPin },
+        { name: 'Academic Structure', href: `/${lang}/admin/academic`, icon: BookOpen },
+        { name: 'Timetable', href: `/${lang}/admin/lms/timetable`, icon: Clock },
+      ]
+    },
+    {
+      group: 'people',
+      label: 'People',
+      icon: Users,
+      items: [
+        { name: 'Admissions', href: `/${lang}/admin/admissions`, icon: ClipboardList },
+        { name: dict.nav.students, href: `/${lang}/admin/lms/students`, icon: Users },
+        { name: dict.nav.teachers, href: `/${lang}/admin/lms/teachers`, icon: UserCog },
+      ]
+    },
+    {
+      group: 'academic',
+      label: 'Academic',
+      icon: GraduationCap,
+      items: [
+        { name: dict.nav.classes, href: `/${lang}/admin/lms/classes`, icon: GraduationCap },
+        { name: dict.nav.attendance, href: `/${lang}/admin/lms/attendance`, icon: Calendar },
+        { name: dict.nav.results, href: `/${lang}/admin/lms/results`, icon: FileText },
+        { name: 'Hifz Tracker', href: `/${lang}/admin/lms/hifz`, icon: BookOpen },
+        { name: 'Library', href: `/${lang}/admin/lms/library`, icon: ClipboardList },
+      ]
+    },
+    {
+      group: 'campus',
+      label: 'Finance & Campus',
+      icon: Wallet,
+      items: [
+        { name: dict.nav.fees, href: `/${lang}/admin/campus/fees`, icon: Wallet },
+        { name: 'Announcements', href: `/${lang}/admin/campus/announcements`, icon: Bell },
+        { name: 'ID Cards', href: `/${lang}/admin/campus/id-cards`, icon: Award },
+      ]
+    },
   ]
 
   const switchLocale = () => {

@@ -31,12 +31,28 @@ export default async function AdminDashboard({ params }: { params: Promise<{ lan
       </div>
 
       {/* Main Section Entry Points */}
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Link href={`/${lang}/admin/campuses`}>
+          <Card className="hover:shadow-lg transition-all cursor-pointer border-primary/20 hover:border-primary group h-full">
+            <CardHeader>
+              <div className="w-12 h-12 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <Building2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <CardTitle className="text-2xl group-hover:text-primary transition-colors">Manage Campuses</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground mb-4">
+                Create and manage multiple branches/campuses for your institution.
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
         <Link href={`/${lang}/admin/campus/fees`}>
           <Card className="hover:shadow-lg transition-all cursor-pointer border-primary/20 hover:border-primary group h-full">
             <CardHeader>
               <div className="w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <Building2 className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                <Wallet className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               </div>
               <CardTitle className="text-2xl group-hover:text-primary transition-colors">Campus & Finance</CardTitle>
             </CardHeader>
@@ -59,6 +75,22 @@ export default async function AdminDashboard({ params }: { params: Promise<{ lan
             <CardContent>
               <p className="text-muted-foreground mb-4">
                 Manage classes, students, teachers, attendance, timetable, results, and digital library.
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href={`/${lang}/admin/academic`}>
+          <Card className="hover:shadow-lg transition-all cursor-pointer border-primary/20 hover:border-primary group h-full">
+            <CardHeader>
+              <div className="w-12 h-12 rounded-lg bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <GraduationCap className="w-6 h-6 text-violet-600 dark:text-violet-400" />
+              </div>
+              <CardTitle className="text-2xl group-hover:text-primary transition-colors">Academic Structure</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground mb-4">
+                Manage academic years, Darajas (levels), classes, and Kutub (subjects).
               </p>
             </CardContent>
           </Card>

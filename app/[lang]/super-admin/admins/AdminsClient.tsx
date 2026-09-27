@@ -21,7 +21,7 @@ export type AdminRow = {
   created_at: string
 }
 
-export function AdminsClient({ initialAdmins }: { initialAdmins: AdminRow[] }) {
+export function AdminsClient({ initialAdmins, institutions }: { initialAdmins: AdminRow[], institutions: {id: string, name: string}[] }) {
   const router = useRouter()
   const [admins, setAdmins] = useState<AdminRow[]>(initialAdmins)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -31,6 +31,7 @@ export function AdminsClient({ initialAdmins }: { initialAdmins: AdminRow[] }) {
   const [nameEn, setNameEn] = useState('')
   const [nameUr, setNameUr] = useState('')
   const [role, setRole] = useState<'nazim' | 'admin'>('nazim')
+  const [institutionId, setInstitutionId] = useState(institutions[0]?.id || '')
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -42,6 +43,7 @@ export function AdminsClient({ initialAdmins }: { initialAdmins: AdminRow[] }) {
     formData.append('fullNameEn', nameEn)
     formData.append('fullNameUr', nameUr)
     formData.append('role', role)
+    formData.append('institution_id', institutionId)
 
     const res = await createAdminBySuperAdmin(formData)
     setIsPending(false)
@@ -210,6 +212,21 @@ export function AdminsClient({ initialAdmins }: { initialAdmins: AdminRow[] }) {
                 >
                   <option value="nazim">Nazim (Head / Principal - Complete Seminary Authority)</option>
                   <option value="admin">Administrator (Deputy / Office Nazim)</option>
+                </select>
+              </div>
+
+              
+              <div className="space-y-1.5">
+                <Label htmlFor="inst" className="text-xs font-semibold">Assign to Jamia (Institution)</Label>
+                <select
+                  id="inst"
+                  value={institutionId}
+                  onChange={(e) => setInstitutionId(e.target.value)}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm font-medium"
+                >
+                  {institutions.map(inst => (
+                    <option key={inst.id} value={inst.id}>{inst.name}</option>
+                  ))}
                 </select>
               </div>
 

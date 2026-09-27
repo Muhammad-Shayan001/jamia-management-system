@@ -1,4 +1,5 @@
-﻿import ForgotPasswordForm from './ForgotPasswordForm'
+import { Suspense } from 'react'
+import ForgotPasswordForm from './ForgotPasswordForm'
 import { getDictionary } from '@/lib/dictionaries'
 
 export default async function ForgotPasswordPage({ params }: { params: Promise<{ lang: string }> }) {
@@ -9,7 +10,9 @@ export default async function ForgotPasswordPage({ params }: { params: Promise<{
     <div className="min-h-screen bg-background flex">
       {/* LEFT SIDE - FORM */}
       <div className="w-full lg:w-[45%] flex flex-col justify-center px-8 sm:px-16 lg:px-24 xl:px-32 relative z-10">
-        <ForgotPasswordForm lang={lang} />
+        <Suspense fallback={<div className="w-full h-64 flex items-center justify-center text-muted-foreground text-sm">Loading...</div>}>
+          <ForgotPasswordForm lang={lang} />
+        </Suspense>
       </div>
 
       {/* RIGHT SIDE - BRANDING */}

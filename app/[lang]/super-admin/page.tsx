@@ -160,6 +160,12 @@ export default async function SuperAdminOverviewPage({
           <CardContent className="pt-4 space-y-2.5">
             {[
               {
+                title: isRtl ? 'Manage Institutions' : 'Manage Institutions (Jamias)',
+                desc: isRtl ? 'Create Jamias' : 'Create & govern multiple independent Jamias (Tenants)',
+                href: `/${lang}/super-admin/institutions`,
+                icon: Shield,
+              },
+              {
                 title: isRtl ? 'ناظمین / ایڈمن اکاؤنٹس کا انتظام' : 'Manage Nazim (Principal) Accounts',
                 desc: isRtl ? 'ناظمین کو اختیارات اور اسناد جاری کریں' : 'Create & govern Nazim administrator logins',
                 href: `/${lang}/super-admin/admins`,

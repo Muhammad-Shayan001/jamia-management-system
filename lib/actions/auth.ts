@@ -362,6 +362,7 @@ export async function createAdminBySuperAdmin(formData: FormData) {
   const fullNameEn = formData.get('fullNameEn') as string
   const fullNameUr = formData.get('fullNameUr') as string
   const role = (formData.get('role') as string) || 'nazim'
+  const institution_id = formData.get('institution_id') as string | null
 
   const passCheck = validatePassword(password, role)
   if (!passCheck.valid) {
@@ -413,6 +414,7 @@ export async function createAdminBySuperAdmin(formData: FormData) {
       role: role as UserRole,
       full_name_en: fullNameEn,
       full_name_ur: fullNameUr,
+      institution_id: institution_id || null,
       is_active: true,
       totp_enabled: false,
     })

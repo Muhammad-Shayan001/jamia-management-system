@@ -45,7 +45,7 @@ const ROLE_PORTALS: Record<string, string> = {
 // Public paths that don't require auth (after locale prefix)
 const PUBLIC_PATHS = ['/', '/login', '/signup', '/reset-password', '/update-password', '/forgot-password', '/about', '/admissions', '/contact']
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // --- 1. Skip Next.js internals and static files ---

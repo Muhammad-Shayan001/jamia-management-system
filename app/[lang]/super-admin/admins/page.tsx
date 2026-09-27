@@ -8,7 +8,7 @@ export default async function SuperAdminAdminsPage() {
   // (RLS might not allow reading other profiles depending on policies)
   const { data: rawProfiles } = await supabaseAdmin
     .from('profiles')
-    .select('id, full_name_en, full_name_ur, role, is_active, created_at')
+    .select('id, full_name_en, full_name_ur, role, is_active, created_at, institution_id')
     .in('role', ['admin', 'nazim'])
     .order('created_at', { ascending: false })
   
@@ -16,6 +16,11 @@ export default async function SuperAdminAdminsPage() {
 
   // Need to get emails from auth.users (requires service role)
   const { data: { users } } = await supabaseAdmin.auth.admin.listUsers()
+
+  const { data: institutions } = await supabaseAdmin
+    .from('institutions')
+    .select('id, name')
+    .order('name')
 
   const admins = (profiles || []).map((profile) => {
     const authUser = users.find(u => u.id === profile.id)
@@ -27,8 +32,9 @@ export default async function SuperAdminAdminsPage() {
       role: profile.role,
       is_active: profile.is_active || false,
       created_at: profile.created_at || new Date().toISOString(),
+      institution_id: profile.institution_id || null,
     }
   })
 
-  return <AdminsClient initialAdmins={admins} />
+  return <AdminsClient initialAdmins={admins} institutions={institutions || []} />
 }

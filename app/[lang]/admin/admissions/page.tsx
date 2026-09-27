@@ -1,8 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import TeachersClient from './TeachersClient'
+import AdminAdmissionsClient from './AdminAdmissionsClient'
 
-export default async function TeachersPage({ params }: { params: Promise<{ lang: string }> }) {
+export default async function AdminAdmissionsPage({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = await params
   const supabase = await createClient()
 
@@ -19,9 +19,8 @@ export default async function TeachersPage({ params }: { params: Promise<{ lang:
     return <div className="p-8 text-center text-red-500">No institution assigned.</div>
   }
 
-  // Fetch teachers for this institution
-  const { data: teachers } = await supabase
-    .from('teachers')
+  const { data: admissions } = await supabase
+    .from('admissions')
     .select('*')
     .eq('institution_id', profile.institution_id)
     .order('created_at', { ascending: false })
@@ -29,10 +28,11 @@ export default async function TeachersPage({ params }: { params: Promise<{ lang:
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">Teacher Management</h2>
-        <p className="text-muted-foreground text-sm">Add and manage teaching staff (Asatiza) for your Jamia.</p>
+        <h2 className="text-2xl font-bold tracking-tight">Admission Applications</h2>
+        <p className="text-muted-foreground text-sm">Review and process student admission requests.</p>
       </div>
-      <TeachersClient initialData={teachers || []} institutionId={profile.institution_id} lang={lang} />
+
+      <AdminAdmissionsClient initialData={admissions || []} lang={lang} />
     </div>
   )
 }
